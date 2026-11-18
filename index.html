@@ -184,6 +184,16 @@
   .tags { display: flex; flex-wrap: wrap; gap: 6px; }
   .tag { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
   .tag em { font-style: normal; color: var(--muted); margin-left: 4px; font-size: 12px; }
+  .person .nick { font-weight: 500; color: var(--muted); font-size: 13px; margin-left: 2px; }
+  dl.info { margin: 0 0 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 4px 12px; }
+  dl.info div { display: grid; grid-template-columns: 8.5em 1fr; gap: 10px; padding: 7px 0; border-top: 1px solid var(--border); }
+  dl.info div:first-child { border-top: 0; }
+  dl.info dt { font-size: 12px; color: var(--muted); font-weight: 700; padding-top: 2px; }
+  dl.info dd { margin: 0; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  @media (max-width: 380px) { dl.info div { grid-template-columns: 1fr; gap: 0; } }
+  .sugg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
+  label.row.toggle { cursor: pointer; }
+  label.row.toggle input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; }
 
   /* ---------- 設定 ---------- */
   .group { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
@@ -325,8 +335,25 @@ function addFail(){
 var DEFAULT_CATS = ['食事', '飲み会', 'お茶・カフェ', '遊び・レジャー', '旅行', 'お祝い', '冠婚葬祭', '仕事・打合せ', '勉強会・イベント', 'オンライン', 'その他'];
 var DEFAULT_GROUPS = ['友達', '知人', '同僚', '仕事関係', '学校', '家族・親戚', 'ご近所'];
 
+// 人ごとの詳細な記録（設定でオンにした項目だけ入力欄が出る）
+var FIELDS = [
+  { k: 'nick',      label: 'あだ名・呼び名',     type: 'text',   ph: '例: たろちゃん、ヤマ' },
+  { k: 'gender',    label: '性別',               type: 'choice', opts: ['男性', '女性', 'その他'] },
+  { k: 'birthday',  label: '誕生日',             type: 'text',   ph: '例: 1990/4/12、4月12日' },
+  { k: 'hometown',  label: '出身地',             type: 'text',   ph: '例: 大阪府堺市' },
+  { k: 'home',      label: '住まい（地域）',     type: 'text',   ph: '例: 横浜市港北区' },
+  { k: 'education', label: '学歴',               type: 'area',   ph: '例: 〇〇高校 → △△大学 経済学部（2013年卒）' },
+  { k: 'career',    label: '経歴・職歴',         type: 'area',   ph: '例: 〇〇商事（2013〜2019）→ △△株式会社 企画部' },
+  { k: 'work',      label: 'いまの勤務先・所属', type: 'text',   ph: '例: △△株式会社 企画部 課長' },
+  { k: 'family',    label: '家族',               type: 'area',   ph: '例: 妻、長男（2020年生まれ）' },
+  { k: 'hobby',     label: '趣味・好きなもの',   type: 'text',   ph: '例: 登山、日本酒、猫' },
+  { k: 'howMet',    label: '知り合ったきっかけ', type: 'area',   ph: '例: 2018年の〇〇勉強会で隣の席だった' },
+  { k: 'contact',   label: '連絡先',             type: 'area',   ph: '例: LINE、電話番号、メール' }
+];
+function fieldByKey(k){ for (var i = 0; i < FIELDS.length; i++) if (FIELDS[i].k === k) return FIELDS[i]; return null; }
+
 function emptyData(){
-  return { v: 1, people: [], meets: [], cats: DEFAULT_CATS.slice(), settings: { autoLock: 5 }, savedAt: 0 };
+  return { v: 1, people: [], meets: [], cats: DEFAULT_CATS.slice(), groups: DEFAULT_GROUPS.slice(), settings: { autoLock: 5, fields: [] }, savedAt: 0 };
 }
 function normalize(d){
   d = d || {};
@@ -335,7 +362,15 @@ function normalize(d){
   out.meets = Array.isArray(d.meets) ? d.meets.filter(function(m){ return m && m.id && m.date; }) : [];
   out.meets.forEach(function(m){ if (!Array.isArray(m.people)) m.people = []; });
   if (Array.isArray(d.cats) && d.cats.length) out.cats = d.cats.filter(function(c){ return typeof c === 'string' && c; });
-  if (d.settings) out.settings.autoLock = typeof d.settings.autoLock === 'number' ? d.settings.autoLock : 5;
+  if (Array.isArray(d.groups)) out.groups = d.groups.filter(function(g){ return typeof g === 'string' && g; });
+  out.people.forEach(function(p){
+    if (p.group && out.groups.indexOf(p.group) < 0) out.groups.push(p.group);   // 入力済みの間柄は一覧に残す
+    if (!p.info || typeof p.info !== 'object') p.info = {};
+  });
+  if (d.settings) {
+    out.settings.autoLock = typeof d.settings.autoLock === 'number' ? d.settings.autoLock : 5;
+    if (Array.isArray(d.settings.fields)) out.settings.fields = d.settings.fields.filter(fieldByKey);
+  }
   out.savedAt = d.savedAt || 0;
   return out;
 }
@@ -388,6 +423,16 @@ function ago(s){
   if (n < 365) return Math.round(n / 30.4) + 'か月前';
   var y = Math.floor(n / 365), m = Math.round((n - y * 365) / 30.4);
   return y + '年' + (m ? m + 'か月' : '') + '前';
+}
+// 「1990/4/12」「1990-04-12」「1990年4月12日」から年齢を出す（年がなければ null）
+function ageOf(s){
+  var m = String(s).match(/(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})/);
+  if (!m) return null;
+  var now = new Date(), y = +m[1], mo = +m[2], d = +m[3];
+  if (y < 1900 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  var a = now.getFullYear() - y;
+  if (now.getMonth() + 1 < mo || (now.getMonth() + 1 === mo && now.getDate() < d)) a--;
+  return a >= 0 && a < 130 ? a : null;
 }
 function hue(str){ var h = 0; for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return 'k' + (h % 7); }
 function avatar(p){ return '<span class="avatar ' + hue(p.id) + '">' + esc((p.name || '?').trim().charAt(0)) + '</span>'; }
@@ -640,7 +685,9 @@ function viewPeople(){
   var q = UI.pq.trim().toLowerCase();
   var list = D.people.filter(function(p){
     if (!q) return true;
-    return (p.name + ' ' + (p.kana || '') + ' ' + (p.group || '') + ' ' + (p.memo || '')).toLowerCase().indexOf(q) >= 0;
+    var info = p.info || {};
+    var hay = [p.name, p.kana, p.group, p.memo].concat(Object.keys(info).map(function(k){ return info[k]; })).join(' ');
+    return hay.toLowerCase().indexOf(q) >= 0;
   });
   var byName = function(a, b){ return (a.kana || a.name).localeCompare(b.kana || b.name, 'ja'); };
   list.sort(function(a, b){
@@ -654,7 +701,7 @@ function viewPeople(){
     if (A.last !== B.last) return A.last < B.last ? 1 : -1;   // 最近会った順
     return byName(a, b);
   });
-  var h = '<div class="tools"><input type="search" id="pq" placeholder="名前・関係で検索" value="' + esc(UI.pq) + '" autocomplete="off">' +
+  var h = '<div class="tools"><input type="search" id="pq" placeholder="名前・間柄・詳細で検索" value="' + esc(UI.pq) + '" autocomplete="off">' +
     '<select id="psort" aria-label="並び順">' +
       [['recent', '最近会った順'], ['long', '会っていない順'], ['count', '回数が多い順'], ['name', '名前順']].map(function(o){ return '<option value="' + o[0] + '"' + (UI.psort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
     '</select></div>';
@@ -663,7 +710,7 @@ function viewPeople(){
     var s = st[p.id];
     var agoTxt = s.last ? '<span class="ago' + (daysSince(s.last) > 180 ? ' long' : '') + '">' + ago(s.last) + '</span>' : 'まだ記録なし';
     return '<button class="person" data-act="open-person" data-id="' + esc(p.id) + '">' + avatar(p) +
-      '<span class="body"><span class="n" style="display:block">' + esc(p.name) + (p.group ? ' <span class="badge" style="margin-left:4px">' + esc(p.group) + '</span>' : '') + '</span>' +
+      '<span class="body"><span class="n" style="display:block">' + esc(p.name) + (p.info && p.info.nick ? '<span class="nick">（' + esc(p.info.nick) + '）</span>' : '') + (p.group ? ' <span class="badge" style="margin-left:4px">' + esc(p.group) + '</span>' : '') + '</span>' +
       '<span class="s" style="display:block">最後に会った: ' + agoTxt + (s.last ? '（' + esc(s.last.replace(/-/g, '/')) + '）' : '') + '</span></span>' +
       '<span class="cnt"><b>' + s.count + '</b>回</span></button>';
   }).join('') + '</div>';
@@ -678,8 +725,17 @@ function viewPerson(){
   var meets = sortedMeets(D.meets.filter(function(m){ return m.people.indexOf(p.id) >= 0; }));
   var h = '<button class="back" data-act="back">' + ICON.back + '人の一覧</button>' +
     '<div class="prof">' + avatar(p) + '<div style="flex:1;min-width:0"><h2>' + esc(p.name) + '</h2><div class="s">' +
-      esc([p.kana, p.group].filter(Boolean).join(' · ')) + '</div></div>' +
+      esc([p.kana, p.info && p.info.nick ? '「' + p.info.nick + '」' : '', p.group].filter(Boolean).join(' · ')) + '</div></div>' +
       '<button class="btn sub sm" data-act="edit-person" data-id="' + esc(p.id) + '">編集</button></div>';
+  var info = p.info || {};
+  var filled = FIELDS.filter(function(f){ return f.k !== 'nick' && info[f.k]; });
+  if (filled.length) {
+    h += '<dl class="info">' + filled.map(function(f){
+      var v = info[f.k];
+      if (f.k === 'birthday') { var a = ageOf(v); if (a != null) v += '（' + a + '歳）'; }
+      return '<div><dt>' + esc(f.label) + '</dt><dd>' + esc(v) + '</dd></div>';
+    }).join('') + '</dl>';
+  }
   if (p.memo) h += '<div class="pmemo">' + esc(p.memo) + '</div>';
   h += '<div class="stats">' +
     '<div><small>会った回数</small><b>' + st.count + '回</b></div>' +
@@ -725,6 +781,18 @@ function viewSettings(){
       }).join('') + '</div>' +
       '<div class="row"><div class="l"><small>名前をタップすると変更できます（変更は過去の記録にも反映されます）</small></div><button class="btn sub sm" data-act="add-cat">＋ 追加</button></div>' +
     '</div>' +
+    '<div class="group"><h2>間柄</h2>' +
+      '<div class="cats">' + D.groups.map(function(g, i){
+        return '<span class="badge"><button style="width:auto;height:auto;border-radius:0;opacity:1" data-act="rename-group" data-i="' + i + '">' + esc(g) + '</button>' +
+          '<button data-act="del-group" data-i="' + i + '" aria-label="' + esc(g) + 'を削除">' + ICON.x + '</button></span>';
+      }).join('') + '</div>' +
+      '<div class="row"><div class="l"><small>人を登録するときに入れた間柄は、ここに自動で追加されます。名前をタップすると変更できます</small></div><button class="btn sub sm" data-act="add-group">＋ 追加</button></div>' +
+    '</div>' +
+    '<div class="group"><h2>人の記録</h2>' +
+      '<button class="row" data-act="fields"><span class="l">詳細な記録' +
+        '<small>' + (D.settings.fields.length ? D.settings.fields.map(function(k){ return fieldByKey(k).label; }).join('・') : 'あだ名・性別・学歴・経歴など。タップして記録する項目を選びます') + '</small></span>' +
+        '<span style="color:var(--muted);font-size:13px;white-space:nowrap">' + (D.settings.fields.length ? D.settings.fields.length + '項目' : 'オフ') + ' ›</span></button>' +
+    '</div>' +
     '<div class="group"><h2>バックアップ</h2>' +
       '<button class="row" data-act="export"><span class="l">バックアップを書き出す<small>暗号化したファイル（.json）。読み込むときは書き出した時点のパスワードが必要です</small></span></button>' +
       '<button class="row" data-act="import"><span class="l">バックアップを読み込む<small>今の記録に合わせます（同じ記録は新しいほうを残します）</small></span></button>' +
@@ -743,7 +811,11 @@ function viewSettings(){
 var form = null;   // 開いているフォームの状態
 
 function openModal(html){ var M = $('modal'); M.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>'; M.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
-function closeModal(){ var M = $('modal'); M.classList.add('hidden'); M.innerHTML = ''; document.body.style.overflow = ''; form = null; }
+function closeModal(){
+  var was = form && form.type;
+  var M = $('modal'); M.classList.add('hidden'); M.innerHTML = ''; document.body.style.overflow = ''; form = null;
+  if (was === 'fields') render();   // 設定画面の「詳細な記録」の表示を更新
+}
 
 function meetForm(m, presetPid){
   var isNew = !m;
@@ -822,7 +894,7 @@ function saveMeet(asCopy){
     if (!id) {
       var same = D.people.filter(function(p){ return p.name === x.name; })[0];
       if (same) id = same.id;
-      else { id = uid(); D.people.push({ id: id, name: x.name, kana: '', group: '', memo: '', createdAt: now, updatedAt: now }); }
+      else { id = uid(); D.people.push({ id: id, name: x.name, kana: '', group: '', info: {}, memo: '', createdAt: now, updatedAt: now }); }
     }
     if (ids.indexOf(id) < 0) ids.push(id);
   });
@@ -840,22 +912,47 @@ function saveMeet(asCopy){
 
 function personForm(p){
   var isNew = !p;
-  p = p || { id: null, name: '', kana: '', group: '', memo: '' };
+  p = p || { id: null, name: '', kana: '', group: '', memo: '', info: {} };
+  var info = p.info || {};
   form = { type: 'person', id: p.id };
-  var groups = uniq(DEFAULT_GROUPS.concat(D.people.map(function(x){ return x.group; })));
   var st = p.id ? personStats()[p.id] : null;
+  // 設定でオンにした項目と、すでに値が入っている項目だけ出す
+  var shown = FIELDS.filter(function(f){ return D.settings.fields.indexOf(f.k) >= 0 || info[f.k]; });
+  var detail = shown.map(function(f){
+    var v = info[f.k] || '', id = 'pf-' + f.k;
+    if (f.type === 'choice') {
+      var opts = f.opts.slice(); if (v && opts.indexOf(v) < 0) opts.push(v);
+      return '<div class="fblock"><span class="f-label">' + esc(f.label) + '</span><div class="chips">' +
+        [''].concat(opts).map(function(o){
+          return '<label class="chip"><input type="radio" name="' + id + '" value="' + esc(o) + '"' + (v === o ? ' checked' : '') + '><span>' + (o ? esc(o) : '未記入') + '</span></label>';
+        }).join('') + '</div></div>';
+    }
+    if (f.type === 'area') return '<label class="f"><span>' + esc(f.label) + '</span><textarea id="' + id + '" placeholder="' + esc(f.ph || '') + '">' + esc(v) + '</textarea></label>';
+    return '<label class="f"><span>' + esc(f.label) + '</span><input type="text" id="' + id + '" value="' + esc(v) + '" placeholder="' + esc(f.ph || '') + '"></label>';
+  }).join('');
   openModal(
     '<div class="sheet-head"><h2>' + (isNew ? '人を登録' : '人を編集') + '</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
-    '<label class="f"><span>名前</span><input type="text" id="pName" value="' + esc(p.name) + '" required placeholder="例: 山田 太郎、たろちゃん"></label>' +
+    '<label class="f"><span>名前</span><input type="text" id="pName" value="' + esc(p.name) + '" required placeholder="例: 山田 太郎"></label>' +
     '<label class="f"><span>ふりがな（任意・並び替えと検索に使います）</span><input type="text" id="pKana" value="' + esc(p.kana || '') + '"></label>' +
-    '<label class="f"><span>関係（任意）</span><input type="text" id="pGroup" value="' + esc(p.group || '') + '" list="groupList" placeholder="例: 友達、大学の同期、取引先"></label>' +
-    '<datalist id="groupList">' + groups.map(function(g){ return '<option value="' + esc(g) + '">'; }).join('') + '</datalist>' +
-    '<label class="f"><span>メモ（任意）</span><textarea id="pMemo" placeholder="知り合ったきっかけ、好きなもの、家族のことなど">' + esc(p.memo || '') + '</textarea></label>' +
+    '<div class="fblock"><label class="f" style="margin:0"><span>間柄（任意）</span><input type="text" id="pGroup" value="' + esc(p.group || '') + '" placeholder="例: 友達、大学の同期、取引先" autocomplete="off"></label>' +
+      '<div class="sugg" id="groupChips"></div></div>' +
+    (detail ? '<h3 class="sec" style="margin-top:20px">詳細</h3>' + detail
+            : '<p class="about">あだ名・性別・学歴・経歴などは、設定 →「詳細な記録」でオンにすると入力欄が出ます。</p>') +
+    '<label class="f"><span>メモ（任意）</span><textarea id="pMemo" placeholder="話したこと、気をつけたいことなど">' + esc(p.memo || '') + '</textarea></label>' +
     '<div class="sheet-foot">' + (isNew ? '' : '<button class="btn danger" data-act="del-person">削除</button>') +
       '<span class="grow"></span><button class="btn" data-act="save-person">保存</button></div>' +
     (st && st.count ? '<p class="about" style="margin-top:10px">削除しても会った記録そのものは残り、相手の欄からこの人が外れます（' + st.count + '件）。</p>' : '')
   );
+  renderGroupChips();
   if (isNew) setTimeout(function(){ $('pName').focus(); }, 60);
+}
+// 一度入力した間柄をタップで入れられるように並べる
+function renderGroupChips(){
+  var el = $('groupChips'); if (!el) return;
+  var cur = $('pGroup').value.trim();
+  el.innerHTML = D.groups.map(function(g){
+    return '<button type="button" data-act="pick-group" data-v="' + esc(g) + '"' + (g === cur ? ' class="on"' : '') + '>' + esc(g) + '</button>';
+  }).join('');
 }
 function savePerson(){
   var name = $('pName').value.trim();
@@ -863,8 +960,18 @@ function savePerson(){
   var dupe = D.people.filter(function(x){ return x.name === name && x.id !== form.id; })[0];
   if (dupe && !confirm('「' + name + '」はすでに登録されています。同じ名前で別の人として保存しますか？')) return;
   var now = Date.now();
-  var data = { name: name, kana: $('pKana').value.trim(), group: $('pGroup').value.trim(), memo: $('pMemo').value.trim(), updatedAt: now };
+  var group = $('pGroup').value.trim();
+  if (group && D.groups.indexOf(group) < 0) D.groups.push(group);
   var p = form.id ? personById(form.id) : null;
+  var info = {};
+  if (p && p.info) for (var k in p.info) info[k] = p.info[k];
+  FIELDS.forEach(function(f){
+    var v;
+    if (f.type === 'choice') { var c = document.querySelector('#modal input[name="pf-' + f.k + '"]:checked'); if (!document.querySelector('#modal input[name="pf-' + f.k + '"]')) return; v = c ? c.value : ''; }
+    else { var el = $('pf-' + f.k); if (!el) return; v = el.value.trim(); }
+    if (v) info[f.k] = v; else delete info[f.k];
+  });
+  var data = { name: name, kana: $('pKana').value.trim(), group: group, info: info, memo: $('pMemo').value.trim(), updatedAt: now };
   if (p) Object.assign(p, data);
   else { data.id = uid(); data.createdAt = now; D.people.push(data); }
   save(); closeModal(); render(); toast('保存しました');
@@ -899,6 +1006,24 @@ function changePass(){
       return deriveKey(secretOf(nu, a), s, ITER).then(function(k){ key = k; salt = s; iter = ITER; userId = nu; return save(); });
     }).then(function(){ closeModal(); toast('ユーザーID・パスワードを変更しました'); },
     function(){ err.textContent = 'いまのパスワードがちがいます'; var bt = $('passBtn'); if (bt) bt.disabled = false; });
+}
+
+function fieldsForm(){
+  form = { type: 'fields' };
+  var on = D.settings.fields;
+  openModal(
+    '<div class="sheet-head"><h2>詳細な記録</h2><button class="btn ghost" data-act="close">完了</button></div>' +
+    '<p class="about" style="padding:4px 0 8px">オンにした項目は、人の登録・編集画面に入力欄が出ます。どれも任意で、空のままでもかまいません。オフにしても、入力済みの内容は消えません。</p>' +
+    '<div class="group" style="margin:0">' + FIELDS.map(function(f){
+      return '<label class="row toggle"><span class="l">' + esc(f.label) + '</span>' +
+        '<input type="checkbox" data-field="' + f.k + '"' + (on.indexOf(f.k) >= 0 ? ' checked' : '') + '></label>';
+    }).join('') + '</div>' +
+    '<div class="sheet-foot"><button class="btn sub sm" data-act="fields-all">すべてオン</button><button class="btn sub sm" data-act="fields-none">すべてオフ</button><span class="grow"></span></div>'
+  );
+}
+function setFields(list){
+  D.settings.fields = FIELDS.map(function(f){ return f.k; }).filter(function(k){ return list.indexOf(k) >= 0; });
+  save();
 }
 
 function importPassForm(box){
@@ -960,6 +1085,7 @@ function mergeIn(text){
   merge(D.people, src.people);
   merge(D.meets, src.meets);
   src.cats.forEach(function(c){ if (D.cats.indexOf(c) < 0) D.cats.push(c); });
+  src.groups.forEach(function(g){ if (D.groups.indexOf(g) < 0) D.groups.push(g); });
   save(); render();
   toast('読み込みました（追加 ' + added + '件・更新 ' + updated + '件）');
 }
@@ -1021,6 +1147,34 @@ document.addEventListener('click', function(e){
       var di = +t.getAttribute('data-i');
       if (confirm('「' + D.cats[di] + '」を選択肢から外しますか？（過去の記録の種類はそのまま残ります）')) { D.cats.splice(di, 1); save(); render(); }
       break;
+    case 'pick-group':
+      var gi = $('pGroup'), gv = t.getAttribute('data-v');
+      gi.value = gi.value.trim() === gv ? '' : gv;   // もう一度タップで外す
+      renderGroupChips();
+      break;
+    case 'add-group':
+      var ng = (prompt('追加する間柄') || '').trim();
+      if (ng && D.groups.indexOf(ng) < 0) { D.groups.push(ng); save(); render(); }
+      break;
+    case 'rename-group':
+      var ri = +t.getAttribute('data-i'), og = D.groups[ri];
+      var rg = (prompt('新しい名前（この間柄の人にも反映されます）', og) || '').trim();
+      if (rg && rg !== og) {
+        if (D.groups.indexOf(rg) >= 0) { toast('同じ名前がすでにあります'); break; }
+        D.groups[ri] = rg;
+        D.people.forEach(function(p){ if (p.group === og) { p.group = rg; p.updatedAt = Date.now(); } });
+        save(); render();
+      }
+      break;
+    case 'del-group':
+      var dg = +t.getAttribute('data-i');
+      if (confirm('「' + D.groups[dg] + '」を候補から外しますか？（登録済みの人の間柄はそのまま残ります）')) { D.groups.splice(dg, 1); save(); render(); }
+      break;
+    case 'fields': fieldsForm(); break;
+    case 'fields-all': case 'fields-none':
+      setFields(act === 'fields-all' ? FIELDS.map(function(f){ return f.k; }) : []);
+      document.querySelectorAll('#modal [data-field]').forEach(function(c){ c.checked = act === 'fields-all'; });
+      break;
     case 'export': doExport(); break;
     case 'import': $('importFile').value = ''; $('importFile').click(); break;
     case 'csv': doCSV(); break;
@@ -1047,6 +1201,7 @@ document.addEventListener('input', function(e){
   if (id === 'q') { UI.q = e.target.value; render(); }
   else if (id === 'pq') { UI.pq = e.target.value; render(); }
   else if (id === 'ppInput') renderSugg();
+  else if (id === 'pGroup') renderGroupChips();
 });
 document.addEventListener('compositionend', function(e){
   var id = e.target.id;
@@ -1059,6 +1214,9 @@ document.addEventListener('change', function(e){
   else if (id === 'psort') { UI.psort = e.target.value; render(); }
   else if (id === 'autoLock') { D.settings.autoLock = +e.target.value; save(); toast('自動ロックを変更しました'); }
   else if (id === 'importFile' && e.target.files[0]) onImportFile(e.target.files[0]);
+  else if (e.target.hasAttribute('data-field')) {
+    setFields([].map.call(document.querySelectorAll('#modal [data-field]:checked'), function(c){ return c.getAttribute('data-field'); }));
+  }
 });
 document.addEventListener('keydown', function(e){
   if (e.target.id === 'ppInput') {
