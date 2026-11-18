@@ -1,6 +1,6 @@
 /* 会った帳 — オフライン用サービスワーカー
    HTML はネットワーク優先（更新をすぐ反映）、それ以外はキャッシュ優先。 */
-var CACHE = 'atta-cho-v1';
+var CACHE = 'atta-cho-v2';
 var ASSETS = [
   './',
   './index.html',

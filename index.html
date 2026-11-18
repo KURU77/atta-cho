@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>会った帳</title>
-<meta name="description" content="知人や友達と、いつ・どんな名目で会ったかを記録するアプリ。記録はパスコードで暗号化して端末に保存します。">
+<meta name="description" content="知人や友達と、いつ・どんな名目で会ったかを記録するアプリ。記録はパスワードで暗号化して端末に保存します。">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#16161a" media="(prefers-color-scheme: dark)">
@@ -77,10 +77,12 @@
   .lock-icon { width: 64px; height: 64px; border-radius: 18px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; margin: 0 auto 14px; }
   .lock-box h1 { font-size: 22px; margin: 0 0 4px; }
   .lock-box p { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
-  .lock-box input[type=password] {
-    width: 100%; font-size: 20px; letter-spacing: .2em; text-align: center; padding: 12px; border-radius: 12px;
+  .lock-box input {
+    width: 100%; font-size: 18px; text-align: center; padding: 12px; border-radius: 12px;
     border: 1px solid var(--border-strong); background: var(--card); margin-bottom: 10px;
   }
+  .lock-box input[type=password] { letter-spacing: .2em; }
+  .lock-box input::placeholder { letter-spacing: normal; }
   .lock-box input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .lock-err { color: var(--danger); font-size: 13px; min-height: 20px; margin-bottom: 8px; }
   .lock-box .btn { width: 100%; }
@@ -260,7 +262,7 @@
 /* =========================================================
    保存と暗号化
    記録はすべて AES-GCM(256bit) で暗号化して localStorage に置く。
-   鍵はパスコードから PBKDF2-SHA256 で導出し、メモリ上にだけ持つ。
+   鍵はパスワードから PBKDF2-SHA256 で導出し、メモリ上にだけ持つ。
    ========================================================= */
 var LS_VAULT = 'atta-cho:vault';
 var LS_FAIL  = 'atta-cho:fails';
@@ -270,7 +272,11 @@ var enc = new TextEncoder(), dec = new TextDecoder();
 var key = null;      // CryptoKey（ロック中は null）
 var salt = null;     // Uint8Array
 var iter = ITER;
+var userId = '';     // ユーザーID（iPhone のパスワード保存で ID とパスワードを組にするため。鍵の材料にも混ぜる）
 var D = null;        // 復号したデータ（ロック中は null）
+
+// ID とパスワードから鍵の材料を作る（ID のない旧形式はパスワードだけ）
+function secretOf(user, pass){ return user ? user + '\u0000' + pass : pass; }
 
 function b64e(u8){ var s = ''; for (var i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
 function b64d(s){ var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
@@ -282,10 +288,10 @@ function deriveKey(pass, saltU8, it){
       { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
   });
 }
-function seal(k, saltU8, it, text){
+function seal(k, saltU8, it, user, text){
   var iv = rand(12);
   return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, k, enc.encode(text)).then(function(ct){
-    return { app: 'atta-cho', v: 1, iter: it, salt: b64e(saltU8), iv: b64e(iv), ct: b64e(new Uint8Array(ct)) };
+    return { app: 'atta-cho', v: 2, user: user, iter: it, salt: b64e(saltU8), iv: b64e(iv), ct: b64e(new Uint8Array(ct)) };
   });
 }
 function open_(k, box){
@@ -297,8 +303,8 @@ var saving = Promise.resolve();
 function save(){
   if (!key || !D) return;
   D.savedAt = Date.now();
-  var text = JSON.stringify(D), k = key, s = salt, it = iter;
-  saving = saving.then(function(){ return seal(k, s, it, text); })
+  var text = JSON.stringify(D), k = key, s = salt, it = iter, u = userId;
+  saving = saving.then(function(){ return seal(k, s, it, u, text); })
     .then(function(box){ localStorage.setItem(LS_VAULT, JSON.stringify(box)); })
     .catch(function(e){ toast('保存できませんでした: ' + (e && e.message || e)); });
   return saving;
@@ -419,30 +425,33 @@ function showLock(mode){
   document.body.classList.remove('covered');
   if (mode === 'setup') {
     L.innerHTML =
-      '<form class="lock-box" id="setupForm" autocomplete="off">' +
+      '<form class="lock-box" id="setupForm" method="post" action="#">' +
         '<div class="lock-icon">' + ICON.lockBig + '</div>' +
         '<h1>会った帳</h1>' +
-        '<p>はじめに、このアプリを開くためのパスコードを決めてください。</p>' +
-        '<input type="password" id="pc1" placeholder="パスコード（4文字以上）" autocomplete="new-password" required minlength="4">' +
-        '<input type="password" id="pc2" placeholder="もう一度" autocomplete="new-password" required minlength="4">' +
+        '<p>はじめに、このアプリを開くためのユーザーIDとパスワードを決めてください。</p>' +
+        '<input type="text" id="uid1" name="username" placeholder="ユーザーID" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required>' +
+        '<input type="password" id="pc1" name="password" placeholder="パスワード（4文字以上）" autocomplete="new-password" required minlength="4">' +
+        '<input type="password" id="pc2" name="password-confirm" placeholder="パスワード（もう一度）" autocomplete="new-password" required minlength="4">' +
         '<div class="lock-err" id="lockErr"></div>' +
         '<button class="btn" type="submit" id="lockBtn">はじめる</button>' +
-        '<div class="note">記録はこのパスコードで暗号化して、この端末の中だけに保存します。<b>パスコードを忘れると記録は取り出せません。</b>数字4桁よりも、6桁以上や英字まじりのほうが安全です。</div>' +
+        '<div class="note">記録はこの ID とパスワードで暗号化して、この端末の中だけに保存します。iPhone では「パスワードを保存」を選ぶと、次からは自動入力や Face ID で開けます。<b>パスワードを忘れると記録は取り出せません。</b>数字4桁よりも、6桁以上や英字まじりのほうが安全です。</div>' +
       '</form>';
-    setTimeout(function(){ $('pc1').focus(); }, 50);
+    setTimeout(function(){ $('uid1').focus(); }, 50);
   } else {
+    var box = readVault(), known = box && box.user || '';
     L.innerHTML =
-      '<form class="lock-box" id="unlockForm" autocomplete="off">' +
+      '<form class="lock-box" id="unlockForm" method="post" action="#">' +
         '<div class="lock-icon">' + ICON.lockBig + '</div>' +
         '<h1>会った帳</h1>' +
-        '<p>パスコードを入力してください</p>' +
-        '<input type="password" id="pc" placeholder="パスコード" autocomplete="current-password" required>' +
+        '<p>' + (box && !box.user ? 'ユーザーIDを決めて、いまのパスワードを入力してください（次から ID とパスワードで開きます）' : 'ユーザーIDとパスワードを入力してください') + '</p>' +
+        '<input type="text" id="uid" name="username" placeholder="ユーザーID" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required value="' + esc(known) + '">' +
+        '<input type="password" id="pc" name="password" placeholder="パスワード" autocomplete="current-password" required>' +
         '<div class="lock-err" id="lockErr"></div>' +
         '<button class="btn" type="submit" id="lockBtn">開く</button>' +
-        '<div class="lock-foot"><button type="button" data-act="forgot">パスコードを忘れた</button></div>' +
+        '<div class="lock-foot"><button type="button" data-act="forgot">パスワードを忘れた</button></div>' +
       '</form>';
     tickWait();
-    setTimeout(function(){ var i = $('pc'); if (i && !i.disabled) i.focus(); }, 50);
+    setTimeout(function(){ var i = known ? $('pc') : $('uid'); if (i && !i.disabled) i.focus(); }, 50);
   }
 }
 
@@ -462,40 +471,48 @@ function tickWait(){
 }
 
 function doSetup(){
-  var a = $('pc1').value, b = $('pc2').value, err = $('lockErr');
-  if (a.length < 4) { err.textContent = '4文字以上にしてください'; return; }
-  if (a !== b) { err.textContent = '2回の入力が一致しません'; $('pc2').value = ''; $('pc2').focus(); return; }
+  var u = $('uid1').value.trim(), a = $('pc1').value, b = $('pc2').value, err = $('lockErr');
+  if (!u) { err.textContent = 'ユーザーIDを入れてください'; $('uid1').focus(); return; }
+  if (a.length < 4) { err.textContent = 'パスワードは4文字以上にしてください'; return; }
+  if (a !== b) { err.textContent = '2回のパスワードが一致しません'; $('pc2').value = ''; $('pc2').focus(); return; }
   $('lockBtn').disabled = true; err.textContent = '';
-  salt = rand(16); iter = ITER;
-  deriveKey(a, salt, iter).then(function(k){
+  salt = rand(16); iter = ITER; userId = u;
+  deriveKey(secretOf(u, a), salt, iter).then(function(k){
     key = k; D = emptyData();
     return save();
-  }).then(function(){ localStorage.removeItem(LS_FAIL); enterApp(); toast('パスコードを設定しました'); });
+  }).then(function(){ localStorage.removeItem(LS_FAIL); enterApp(); toast('ユーザーIDとパスワードを設定しました'); });
 }
 
 function doUnlock(){
-  var pass = $('pc').value, box = readVault(), err = $('lockErr'), btn = $('lockBtn');
+  var u = $('uid').value.trim(), pass = $('pc').value, box = readVault(), err = $('lockErr'), btn = $('lockBtn');
   if (!box) { showLock('setup'); return; }
+  if (!u) { err.textContent = 'ユーザーIDを入れてください'; $('uid').focus(); return; }
   if (failState().until > Date.now()) { tickWait(); return; }
   btn.disabled = true; err.textContent = '確認しています…';
+  var legacy = !box.user;   // ID を導入する前の形式（パスワードだけで暗号化）
   var s = b64d(box.salt), it = box.iter || ITER, k;
-  deriveKey(pass, s, it).then(function(kk){ k = kk; return open_(k, box); }).then(function(text){
-    key = k; salt = s; iter = it;
+  deriveKey(legacy ? pass : secretOf(u, pass), s, it).then(function(kk){ k = kk; return open_(k, box); }).then(function(text){
     D = normalize(JSON.parse(text));
     localStorage.removeItem(LS_FAIL);
+    if (!legacy) { key = k; salt = s; iter = it; userId = u; return; }
+    // 旧形式 → 入力された ID を組み込んで暗号化し直す
+    var ns = rand(16);
+    return deriveKey(secretOf(u, pass), ns, ITER).then(function(nk){ key = nk; salt = ns; iter = ITER; userId = u; return save(); });
+  }).then(function(){
     enterApp();
+    if (legacy) toast('ユーザーID「' + u + '」を設定しました');
   }, function(){
     var f = addFail();
     $('pc').value = '';
     btn.disabled = false;
-    err.textContent = 'パスコードがちがいます' + (f.n >= 3 && f.n < 5 ? '（あと' + (5 - f.n) + '回で待ち時間が入ります）' : '');
+    err.textContent = 'ユーザーIDかパスワードがちがいます' + (f.n >= 3 && f.n < 5 ? '（あと' + (5 - f.n) + '回で待ち時間が入ります）' : '');
     tickWait();
     if (!$('pc').disabled) $('pc').focus();
   });
 }
 
 function forgot(){
-  if (!confirm('パスコードが分からない場合、記録を取り出す方法はありません。\n\nこの端末の記録をすべて消して、はじめからやり直しますか？')) return;
+  if (!confirm('パスワードが分からない場合、記録を取り出す方法はありません。\n\nこの端末の記録をすべて消して、はじめからやり直しますか？')) return;
   if (!confirm('本当に消しますか？この操作は取り消せません。')) return;
   localStorage.removeItem(LS_VAULT); localStorage.removeItem(LS_FAIL);
   showLock('setup');
@@ -698,7 +715,7 @@ function viewSettings(){
   var opts = [[0, 'アプリを離れたらすぐ'], [1, '1分操作しなかったら'], [5, '5分操作しなかったら'], [15, '15分操作しなかったら'], [60, '1時間操作しなかったら']];
   return '<div class="group"><h2>ロック</h2>' +
       '<div class="row"><div class="l">自動でロック</div><select id="autoLock">' + opts.map(function(o){ return '<option value="' + o[0] + '"' + (al === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
-      '<button class="row" data-act="change-pass"><span class="l">パスコードを変更</span></button>' +
+      '<button class="row" data-act="change-pass"><span class="l">ユーザーID・パスワードを変更<small>いまのユーザーID: ' + esc(userId) + '</small></span></button>' +
       '<button class="row" data-act="lock"><span class="l">今すぐロック</span></button>' +
     '</div>' +
     '<div class="group"><h2>会った名目の種類</h2>' +
@@ -709,7 +726,7 @@ function viewSettings(){
       '<div class="row"><div class="l"><small>名前をタップすると変更できます（変更は過去の記録にも反映されます）</small></div><button class="btn sub sm" data-act="add-cat">＋ 追加</button></div>' +
     '</div>' +
     '<div class="group"><h2>バックアップ</h2>' +
-      '<button class="row" data-act="export"><span class="l">バックアップを書き出す<small>暗号化したファイル（.json）。読み込むときは書き出した時点のパスコードが必要です</small></span></button>' +
+      '<button class="row" data-act="export"><span class="l">バックアップを書き出す<small>暗号化したファイル（.json）。読み込むときは書き出した時点のパスワードが必要です</small></span></button>' +
       '<button class="row" data-act="import"><span class="l">バックアップを読み込む<small>今の記録に合わせます（同じ記録は新しいほうを残します）</small></span></button>' +
       '<button class="row" data-act="csv"><span class="l">表計算用に書き出す（CSV）<small>暗号化されていないファイルになるので、扱いに注意してください</small></span></button>' +
     '</div>' +
@@ -717,7 +734,7 @@ function viewSettings(){
       '<div class="row"><div class="l">記録 ' + D.meets.length + '件 · 人 ' + D.people.length + '人<small>この端末の中に暗号化して保存しています。外部には送信しません</small></div></div>' +
       '<button class="row dz" data-act="wipe">すべての記録を消去</button>' +
     '</div>' +
-    '<p class="about">会った帳 · 記録は AES-256 で暗号化され、パスコードはどこにも保存されません。ブラウザのデータを消すと記録も消えるので、ときどきバックアップを書き出してください。</p>';
+    '<p class="about">会った帳 · 記録は AES-256 で暗号化され、パスワードはどこにも保存されません。ブラウザのデータを消すと記録も消えるので、ときどきバックアップを書き出してください。</p>';
 }
 
 /* =========================================================
@@ -856,37 +873,40 @@ function savePerson(){
 function passForm(){
   form = { type: 'pass' };
   openModal(
-    '<div class="sheet-head"><h2>パスコードを変更</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
-    '<form id="passForm" autocomplete="off">' +
-    '<label class="f"><span>いまのパスコード</span><input type="password" id="op" autocomplete="current-password" required></label>' +
-    '<label class="f"><span>新しいパスコード（4文字以上）</span><input type="password" id="np1" autocomplete="new-password" required minlength="4"></label>' +
-    '<label class="f"><span>新しいパスコード（もう一度）</span><input type="password" id="np2" autocomplete="new-password" required minlength="4"></label>' +
+    '<div class="sheet-head"><h2>ユーザーID・パスワードを変更</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
+    '<form id="passForm" method="post" action="#">' +
+    '<label class="f"><span>いまのパスワード</span><input type="password" id="op" name="current-password" autocomplete="current-password" required></label>' +
+    '<label class="f"><span>ユーザーID（変えないならそのまま）</span><input type="text" id="nu" name="username" autocomplete="username" autocapitalize="off" autocorrect="off" spellcheck="false" required value="' + esc(userId) + '"></label>' +
+    '<label class="f"><span>新しいパスワード（4文字以上）</span><input type="password" id="np1" name="new-password" autocomplete="new-password" required minlength="4"></label>' +
+    '<label class="f"><span>新しいパスワード（もう一度）</span><input type="password" id="np2" name="new-password-confirm" autocomplete="new-password" required minlength="4"></label>' +
+    '<p class="about">ID だけ変えたいときは、新しいパスワードにいまと同じものを入れてください。変えたあとは、iPhone に保存したパスワードも更新してください。</p>' +
     '<div class="lock-err" id="passErr"></div>' +
     '<div class="sheet-foot"><span class="grow"></span><button class="btn" type="submit" id="passBtn">変更する</button></div></form>'
   );
   setTimeout(function(){ $('op').focus(); }, 60);
 }
 function changePass(){
-  var op = $('op').value, a = $('np1').value, b = $('np2').value, err = $('passErr');
-  if (a.length < 4) { err.textContent = '新しいパスコードは4文字以上にしてください'; return; }
-  if (a !== b) { err.textContent = '新しいパスコードが一致しません'; return; }
-  var box = readVault();
+  var op = $('op').value, nu = $('nu').value.trim(), a = $('np1').value, b = $('np2').value, err = $('passErr');
+  if (!nu) { err.textContent = 'ユーザーIDを入れてください'; return; }
+  if (a.length < 4) { err.textContent = '新しいパスワードは4文字以上にしてください'; return; }
+  if (a !== b) { err.textContent = '新しいパスワードが一致しません'; return; }
   $('passBtn').disabled = true; err.textContent = '確認しています…';
-  saving.then(function(){ return deriveKey(op, b64d(box.salt), box.iter || ITER); })
-    .then(function(k){ return open_(k, readVault()); })
-    .then(function(){
+  saving.then(function(){
+    var box = readVault();
+    return deriveKey(secretOf(box.user, op), b64d(box.salt), box.iter || ITER).then(function(k){ return open_(k, box); });
+  }).then(function(){
       var s = rand(16);
-      return deriveKey(a, s, ITER).then(function(k){ key = k; salt = s; iter = ITER; return save(); });
-    }).then(function(){ closeModal(); toast('パスコードを変更しました'); },
-    function(){ err.textContent = 'いまのパスコードがちがいます'; var bt = $('passBtn'); if (bt) bt.disabled = false; });
+      return deriveKey(secretOf(nu, a), s, ITER).then(function(k){ key = k; salt = s; iter = ITER; userId = nu; return save(); });
+    }).then(function(){ closeModal(); toast('ユーザーID・パスワードを変更しました'); },
+    function(){ err.textContent = 'いまのパスワードがちがいます'; var bt = $('passBtn'); if (bt) bt.disabled = false; });
 }
 
 function importPassForm(box){
   form = { type: 'importPass', box: box };
   openModal(
     '<div class="sheet-head"><h2>バックアップを開く</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
-    '<form id="importForm" autocomplete="off"><p style="font-size:14px;color:var(--muted)">このバックアップを書き出したときのパスコードを入力してください。</p>' +
-    '<label class="f"><span>パスコード</span><input type="password" id="ip" required></label>' +
+    '<form id="importForm" autocomplete="off"><p style="font-size:14px;color:var(--muted)">このバックアップを書き出したときのパスワードを入力してください' + (box.user ? '（ユーザーID「' + esc(box.user) + '」）' : '') + '。</p>' +
+    '<label class="f"><span>パスワード</span><input type="password" id="ip" required></label>' +
     '<div class="lock-err" id="ipErr"></div>' +
     '<div class="sheet-foot"><span class="grow"></span><button class="btn" type="submit">読み込む</button></div></form>'
   );
@@ -896,7 +916,7 @@ function importPassForm(box){
 /* ---------- バックアップ ---------- */
 function stamp(){ var d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); }
 function doExport(){
-  seal(key, salt, iter, JSON.stringify(D)).then(function(box){
+  seal(key, salt, iter, userId, JSON.stringify(D)).then(function(box){
     download('atta-cho-backup-' + stamp() + '.json', JSON.stringify(box), 'application/json');
     toast('バックアップを書き出しました');
   });
@@ -914,8 +934,8 @@ function onImportFile(file){
     var box;
     try { box = JSON.parse(r.result); } catch (e) { toast('読み込めないファイルです'); return; }
     if (!box || !box.ct || !box.iv || !box.salt) { toast('会った帳のバックアップではないようです'); return; }
-    // 今と同じパスコード・同じ salt なら、そのまま開ける
-    var tryKey = box.salt === b64e(salt) ? Promise.resolve(key) : Promise.reject();
+    // 今と同じ ID・パスワード・salt で書き出したものなら、そのまま開ける
+    var tryKey = box.salt === b64e(salt) && (box.user || '') === userId ? Promise.resolve(key) : Promise.reject();
     tryKey.then(function(k){ return open_(k, box); }).then(mergeIn, function(){ importPassForm(box); });
   };
   r.readAsText(file);
@@ -923,8 +943,8 @@ function onImportFile(file){
 function importWithPass(){
   var box = form.box, pass = $('ip').value;
   $('ipErr').textContent = '確認しています…';
-  deriveKey(pass, b64d(box.salt), box.iter || ITER).then(function(k){ return open_(k, box); })
-    .then(function(text){ closeModal(); mergeIn(text); }, function(){ $('ipErr').textContent = 'パスコードがちがいます'; });
+  deriveKey(secretOf(box.user, pass), b64d(box.salt), box.iter || ITER).then(function(k){ return open_(k, box); })
+    .then(function(text){ closeModal(); mergeIn(text); }, function(){ $('ipErr').textContent = 'パスワードがちがいます'; });
 }
 function mergeIn(text){
   var src;
