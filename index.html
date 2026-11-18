@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>会った帳</title>
+<meta name="description" content="知人や友達と、いつ・どんな名目で会ったかを記録するアプリ。記録はパスコードで暗号化して端末に保存します。">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#16161a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="会った帳">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<style>
+  :root {
+    --bg: #f6f5f2;
+    --card: #ffffff;
+    --subtle: #eeece7;
+    --fg: #1c1b20;
+    --muted: #67646c;
+    --faint: #9a97a0;
+    --border: #e2e0db;
+    --border-strong: #cdcac3;
+    --accent: #5a4fb0;
+    --accent-soft: #ebe8fa;
+    --accent-fg: #ffffff;
+    --danger: #b3261e;
+    --shadow: 0 1px 2px rgba(28,27,32,.05), 0 6px 16px -10px rgba(28,27,32,.16);
+    --radius: 14px;
+    --c0: #c2532f; --c0b: #f9e6de;
+    --c1: #b0761a; --c1b: #f7ecd6;
+    --c2: #2f7a55; --c2b: #e0f0e7;
+    --c3: #2a6f99; --c3b: #ddedf6;
+    --c4: #5a4fb0; --c4b: #e9e6f8;
+    --c5: #a2407a; --c5b: #f5e2ee;
+    --c6: #4f7a1f; --c6b: #e8f1db;
+    --c7: #6b6861; --c7b: #ecebe7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #16161a; --card: #201f25; --subtle: #2a2930; --fg: #efeef3; --muted: #a7a4ae; --faint: #7a7782;
+      --border: #33323a; --border-strong: #45444d; --accent: #a89cf2; --accent-soft: #2e2a48; --accent-fg: #17142c;
+      --danger: #f2867e; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 6px 16px -10px rgba(0,0,0,.6);
+      --c0: #f09a78; --c0b: #3c241b;
+      --c1: #e7b866; --c1b: #382c15;
+      --c2: #7cc9a0; --c2b: #1d3328;
+      --c3: #7fbde3; --c3b: #1a2d3a;
+      --c4: #a89cf2; --c4b: #2b2745;
+      --c5: #e89ac7; --c5b: #3a2131;
+      --c6: #a9d27a; --c6b: #26321a;
+      --c7: #aaa69d; --c7b: #2c2b28;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Yu Gothic UI", Meiryo, sans-serif;
+    font-size: 15px; line-height: 1.55;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body.covered #app, body.covered #modal { visibility: hidden; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; border: 0; background: none; padding: 0; }
+  .hidden { display: none !important; }
+
+  /* ---------- ロック画面 ---------- */
+  #lock {
+    min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+    padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
+  }
+  .lock-box { width: 100%; max-width: 340px; text-align: center; }
+  .lock-icon { width: 64px; height: 64px; border-radius: 18px; background: var(--accent); color: var(--accent-fg); display: grid; place-items: center; margin: 0 auto 14px; }
+  .lock-box h1 { font-size: 22px; margin: 0 0 4px; }
+  .lock-box p { color: var(--muted); font-size: 13px; margin: 0 0 18px; }
+  .lock-box input[type=password] {
+    width: 100%; font-size: 20px; letter-spacing: .2em; text-align: center; padding: 12px; border-radius: 12px;
+    border: 1px solid var(--border-strong); background: var(--card); margin-bottom: 10px;
+  }
+  .lock-box input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .lock-err { color: var(--danger); font-size: 13px; min-height: 20px; margin-bottom: 8px; }
+  .lock-box .btn { width: 100%; }
+  .lock-foot { margin-top: 26px; font-size: 12px; }
+  .lock-foot button { color: var(--muted); text-decoration: underline; }
+  .note { font-size: 12px; color: var(--muted); text-align: left; background: var(--subtle); border-radius: 10px; padding: 10px 12px; margin-top: 16px; }
+
+  /* ---------- 共通 ---------- */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 11px 16px; border-radius: 12px; font-weight: 700; background: var(--accent); color: var(--accent-fg); }
+  .btn.sub { background: var(--subtle); color: var(--fg); }
+  .btn.ghost { background: transparent; color: var(--accent); padding: 8px 10px; }
+  .btn.danger { background: transparent; color: var(--danger); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.sm { padding: 7px 12px; font-size: 13px; border-radius: 10px; }
+
+  header.top {
+    position: sticky; top: 0; z-index: 5; background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px); -webkit-backdrop-filter: saturate(1.4) blur(10px);
+    padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  header.top h1 { font-size: 18px; margin: 0; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .icon-btn { width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); }
+  .icon-btn:hover { background: var(--subtle); }
+  main { max-width: 680px; margin: 0 auto; padding: 14px 16px calc(150px + env(safe-area-inset-bottom)); }
+
+  nav.tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; background: var(--card);
+    border-top: 1px solid var(--border); padding-bottom: env(safe-area-inset-bottom);
+  }
+  nav.tabs button { flex: 1; padding: 8px 0 7px; font-size: 11px; color: var(--faint); display: flex; flex-direction: column; align-items: center; gap: 2px; font-weight: 600; }
+  nav.tabs button[aria-current=page] { color: var(--accent); }
+  .fab {
+    position: fixed; right: 16px; bottom: calc(70px + env(safe-area-inset-bottom)); z-index: 6;
+    box-shadow: 0 8px 20px -8px rgba(0,0,0,.45); border-radius: 999px; padding: 13px 20px;
+  }
+
+  .sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .sum div { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 8px 10px; }
+  .sum small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .sum b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .sum b span { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+
+  .tools { display: flex; gap: 8px; margin-bottom: 12px; }
+  .tools input, .tools select { min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--card); font-size: 14px; }
+  .tools input { flex: 1; }
+  .tools select { max-width: 42%; }
+
+  .month { font-size: 13px; font-weight: 700; color: var(--muted); margin: 18px 2px 8px; display: flex; justify-content: space-between; }
+  .month:first-child { margin-top: 4px; }
+  .list { display: flex; flex-direction: column; gap: 8px; }
+  .item {
+    display: flex; gap: 12px; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 11px 14px; box-shadow: var(--shadow);
+  }
+  .item .d { flex: none; width: 34px; text-align: center; line-height: 1.1; padding-top: 2px; }
+  .item .d b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .item .d small { font-size: 11px; color: var(--muted); }
+  .item .d small.sun { color: var(--c0); } .item .d small.sat { color: var(--c3); }
+  .item .body { flex: 1; min-width: 0; }
+  .item .t { font-weight: 700; overflow-wrap: anywhere; }
+  .item .ppl { font-size: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+  .item .meta { font-size: 12px; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .y { font-size: 11px; color: var(--faint); }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 8px; border-radius: 999px; margin-right: 6px; vertical-align: 2px; white-space: nowrap; background: var(--c7b); color: var(--c7); }
+  .k0 { background: var(--c0b); color: var(--c0); } .k1 { background: var(--c1b); color: var(--c1); } .k2 { background: var(--c2b); color: var(--c2); } .k3 { background: var(--c3b); color: var(--c3); }
+  .k4 { background: var(--c4b); color: var(--c4); } .k5 { background: var(--c5b); color: var(--c5); } .k6 { background: var(--c6b); color: var(--c6); } .k7 { background: var(--c7b); color: var(--c7); }
+
+  .person { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 11px 14px; box-shadow: var(--shadow); }
+  .avatar { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 15px; }
+  .person .body { flex: 1; min-width: 0; }
+  .person .n { font-weight: 700; overflow-wrap: anywhere; }
+  .person .s { font-size: 12px; color: var(--muted); }
+  .person .cnt { flex: none; text-align: right; font-size: 12px; color: var(--muted); }
+  .person .cnt b { display: block; font-size: 18px; color: var(--fg); font-variant-numeric: tabular-nums; }
+  .person .ago { color: var(--fg); font-weight: 600; }
+  .person .ago.long { color: var(--c0); }
+
+  .empty { text-align: center; color: var(--muted); padding: 44px 16px; }
+  .empty b { display: block; color: var(--fg); font-size: 16px; margin-bottom: 4px; }
+
+  .back { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 600; margin-bottom: 10px; padding: 4px 0; }
+  .prof { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+  .prof .avatar { width: 56px; height: 56px; font-size: 22px; }
+  .prof h2 { margin: 0; font-size: 21px; overflow-wrap: anywhere; }
+  .prof .s { color: var(--muted); font-size: 13px; }
+  .pmemo { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; font-size: 14px; white-space: pre-wrap; overflow-wrap: anywhere; margin-bottom: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
+  .stats div { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 9px 12px; }
+  .stats small { display: block; font-size: 11px; color: var(--muted); font-weight: 600; }
+  .stats b { font-size: 17px; }
+  .stats b span { font-size: 12px; color: var(--muted); font-weight: 500; margin-left: 4px; }
+  h3.sec { font-size: 13px; color: var(--muted); margin: 18px 2px 8px; }
+  .bars { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+  .bars .r { display: grid; grid-template-columns: 7.5em 1fr 2.2em; align-items: center; gap: 8px; font-size: 13px; }
+  .bars .r span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bars .r i { display: block; height: 8px; border-radius: 4px; min-width: 4px; }
+  .bars .r em { font-style: normal; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tag { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+  .tag em { font-style: normal; color: var(--muted); margin-left: 4px; font-size: 12px; }
+
+  /* ---------- 設定 ---------- */
+  .group { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 14px; overflow: hidden; }
+  .group h2 { font-size: 13px; color: var(--muted); margin: 0; padding: 12px 14px 4px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-top: 1px solid var(--border); }
+  .group h2 + .row { border-top: 0; }
+  .row .l { flex: 1; min-width: 0; }
+  .row .l small { display: block; color: var(--muted); font-size: 12px; }
+  .row select { padding: 7px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--subtle); }
+  button.row { width: 100%; text-align: left; }
+  button.row.dz { color: var(--danger); font-weight: 600; }
+  .cats { display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 14px 12px; }
+  .cats .badge { font-size: 13px; padding: 4px 4px 4px 10px; margin: 0; display: inline-flex; align-items: center; gap: 2px; }
+  .cats .badge button { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; opacity: .75; }
+  .cats .badge button:hover { opacity: 1; background: rgba(127,127,127,.15); }
+  .about { font-size: 12px; color: var(--muted); padding: 4px 4px 0; }
+
+  /* ---------- モーダル ---------- */
+  #modal { position: fixed; inset: 0; z-index: 20; background: rgba(10,10,14,.45); display: flex; align-items: flex-end; justify-content: center; }
+  .sheet {
+    background: var(--bg); width: 100%; max-width: 560px; max-height: 92vh; max-height: 92dvh; overflow: auto;
+    border-radius: 18px 18px 0 0; padding: 0 16px calc(18px + env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+  @media (min-width: 600px) { #modal { align-items: center; } .sheet { border-radius: 18px; } }
+  .sheet-head { position: sticky; top: 0; z-index: 1; background: var(--bg); display: flex; align-items: center; justify-content: space-between; padding: 12px 0 10px; margin-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .sheet-head h2 { font-size: 16px; margin: 0; }
+  label.f { display: block; margin: 12px 0; }
+  label.f > span, .f-label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 700; }
+  label.f input, label.f textarea, label.f select, .pp-box {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-strong); background: var(--card); font-size: 16px;
+  }
+  label.f textarea { min-height: 84px; resize: vertical; }
+  .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 10px; }
+  .two label.f { margin: 0; }
+  .fblock { margin: 12px 0; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip input { position: absolute; opacity: 0; pointer-events: none; }
+  .chip span { display: inline-block; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--card); font-size: 14px; cursor: pointer; }
+  .chip input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); font-weight: 700; }
+  .chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .pp-box { display: flex; flex-wrap: wrap; gap: 6px; padding: 7px 8px; min-height: 46px; }
+  .pp-box:focus-within { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .pp-box input { flex: 1; min-width: 8em; border: 0; outline: 0; background: transparent; padding: 3px 4px; font-size: 16px; }
+  .pp-chip { display: inline-flex; align-items: center; gap: 2px; background: var(--accent-soft); color: var(--fg); border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 14px; font-weight: 600; }
+  .pp-chip.new { border: 1px dashed var(--accent); }
+  .pp-chip button { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+  .sugg { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .sugg button { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--card); font-size: 13px; }
+  .sugg button.add { border-style: dashed; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .sugg .hint { font-size: 12px; color: var(--faint); align-self: center; }
+  .sheet-foot { display: flex; gap: 8px; align-items: center; margin-top: 18px; }
+  .sheet-foot .grow { flex: 1; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: calc(130px + env(safe-area-inset-bottom)); transform: translateX(-50%); z-index: 30;
+    background: var(--fg); color: var(--bg); padding: 9px 16px; border-radius: 999px; font-size: 14px; font-weight: 600;
+    box-shadow: 0 8px 20px -8px rgba(0,0,0,.5); max-width: calc(100vw - 32px); text-align: center;
+    transition: opacity .2s; opacity: 0; pointer-events: none;
+  }
+  #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="lock" class="hidden"></div>
+<div id="app" class="hidden"></div>
+<div id="modal" class="hidden"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="importFile" accept=".json,application/json" class="hidden">
+
+<script>
+(function(){
+'use strict';
+
+/* =========================================================
+   保存と暗号化
+   記録はすべて AES-GCM(256bit) で暗号化して localStorage に置く。
+   鍵はパスコードから PBKDF2-SHA256 で導出し、メモリ上にだけ持つ。
+   ========================================================= */
+var LS_VAULT = 'atta-cho:vault';
+var LS_FAIL  = 'atta-cho:fails';
+var ITER = 310000;
+var enc = new TextEncoder(), dec = new TextDecoder();
+
+var key = null;      // CryptoKey（ロック中は null）
+var salt = null;     // Uint8Array
+var iter = ITER;
+var D = null;        // 復号したデータ（ロック中は null）
+
+function b64e(u8){ var s = ''; for (var i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); }
+function b64d(s){ var b = atob(s), u = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; }
+function rand(n){ return crypto.getRandomValues(new Uint8Array(n)); }
+
+function deriveKey(pass, saltU8, it){
+  return crypto.subtle.importKey('raw', enc.encode(pass), 'PBKDF2', false, ['deriveKey']).then(function(base){
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: saltU8, iterations: it, hash: 'SHA-256' }, base,
+      { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  });
+}
+function seal(k, saltU8, it, text){
+  var iv = rand(12);
+  return crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, k, enc.encode(text)).then(function(ct){
+    return { app: 'atta-cho', v: 1, iter: it, salt: b64e(saltU8), iv: b64e(iv), ct: b64e(new Uint8Array(ct)) };
+  });
+}
+function open_(k, box){
+  return crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64d(box.iv) }, k, b64d(box.ct)).then(function(pt){ return dec.decode(pt); });
+}
+function readVault(){ try { var v = JSON.parse(localStorage.getItem(LS_VAULT)); return v && v.ct ? v : null; } catch (e) { return null; } }
+
+var saving = Promise.resolve();
+function save(){
+  if (!key || !D) return;
+  D.savedAt = Date.now();
+  var text = JSON.stringify(D), k = key, s = salt, it = iter;
+  saving = saving.then(function(){ return seal(k, s, it, text); })
+    .then(function(box){ localStorage.setItem(LS_VAULT, JSON.stringify(box)); })
+    .catch(function(e){ toast('保存できませんでした: ' + (e && e.message || e)); });
+  return saving;
+}
+
+/* ---------- 失敗回数による待ち時間 ---------- */
+function failState(){ try { return JSON.parse(localStorage.getItem(LS_FAIL)) || { n: 0, until: 0 }; } catch (e) { return { n: 0, until: 0 }; } }
+function addFail(){
+  var f = failState(); f.n++;
+  if (f.n >= 5) f.until = Date.now() + Math.min(3600, 30 * Math.pow(2, f.n - 5)) * 1000;
+  localStorage.setItem(LS_FAIL, JSON.stringify(f));
+  return f;
+}
+
+/* =========================================================
+   データ
+   ========================================================= */
+var DEFAULT_CATS = ['食事', '飲み会', 'お茶・カフェ', '遊び・レジャー', '旅行', 'お祝い', '冠婚葬祭', '仕事・打合せ', '勉強会・イベント', 'オンライン', 'その他'];
+var DEFAULT_GROUPS = ['友達', '知人', '同僚', '仕事関係', '学校', '家族・親戚', 'ご近所'];
+
+function emptyData(){
+  return { v: 1, people: [], meets: [], cats: DEFAULT_CATS.slice(), settings: { autoLock: 5 }, savedAt: 0 };
+}
+function normalize(d){
+  d = d || {};
+  var out = emptyData();
+  out.people = Array.isArray(d.people) ? d.people.filter(function(p){ return p && p.id && p.name; }) : [];
+  out.meets = Array.isArray(d.meets) ? d.meets.filter(function(m){ return m && m.id && m.date; }) : [];
+  out.meets.forEach(function(m){ if (!Array.isArray(m.people)) m.people = []; });
+  if (Array.isArray(d.cats) && d.cats.length) out.cats = d.cats.filter(function(c){ return typeof c === 'string' && c; });
+  if (d.settings) out.settings.autoLock = typeof d.settings.autoLock === 'number' ? d.settings.autoLock : 5;
+  out.savedAt = d.savedAt || 0;
+  return out;
+}
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function personById(id){ for (var i = 0; i < D.people.length; i++) if (D.people[i].id === id) return D.people[i]; return null; }
+function meetById(id){ for (var i = 0; i < D.meets.length; i++) if (D.meets[i].id === id) return D.meets[i]; return null; }
+function catClass(c){ var i = D.cats.indexOf(c); return i < 0 ? 'k7' : 'k' + (i % 7); }
+
+function sortedMeets(list){
+  return list.slice().sort(function(a, b){
+    if (a.date !== b.date) return a.date < b.date ? 1 : -1;
+    var at = a.time || '', bt = b.time || '';
+    if (at !== bt) return at < bt ? 1 : -1;
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+}
+function personStats(){
+  var s = {};
+  D.people.forEach(function(p){ s[p.id] = { count: 0, last: '', first: '', year: 0 }; });
+  var y = String(new Date().getFullYear());
+  D.meets.forEach(function(m){
+    m.people.forEach(function(id){
+      var t = s[id]; if (!t) return;
+      t.count++;
+      if (!t.last || m.date > t.last) t.last = m.date;
+      if (!t.first || m.date < t.first) t.first = m.date;
+      if (m.date.slice(0, 4) === y) t.year++;
+    });
+  });
+  return s;
+}
+
+/* =========================================================
+   小物
+   ========================================================= */
+function esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function $(id){ return document.getElementById(id); }
+function pad(n){ return (n < 10 ? '0' : '') + n; }
+function todayStr(){ var d = new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+function parseD(s){ var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
+var WD = ['日', '月', '火', '水', '木', '金', '土'];
+function fmtD(s){ var d = parseD(s); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + '（' + WD[d.getDay()] + '）'; }
+function daysSince(s){ return Math.round((parseD(todayStr()) - parseD(s)) / 86400000); }
+function ago(s){
+  var n = daysSince(s);
+  if (n < 0) return (-n) + '日後';
+  if (n === 0) return '今日';
+  if (n === 1) return '昨日';
+  if (n < 45) return n + '日前';
+  if (n < 365) return Math.round(n / 30.4) + 'か月前';
+  var y = Math.floor(n / 365), m = Math.round((n - y * 365) / 30.4);
+  return y + '年' + (m ? m + 'か月' : '') + '前';
+}
+function hue(str){ var h = 0; for (var i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0; return 'k' + (h % 7); }
+function avatar(p){ return '<span class="avatar ' + hue(p.id) + '">' + esc((p.name || '?').trim().charAt(0)) + '</span>'; }
+function namesOf(m){ return m.people.map(function(id){ var p = personById(id); return p ? p.name : null; }).filter(Boolean); }
+
+var toastTimer;
+function toast(msg){ var t = $('toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 2400); }
+
+function download(name, text, type){
+  var blob = new Blob([text], { type: type });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(a.href); }, 4000);
+}
+
+var ICON = {
+  lock: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  lockBig: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
+  list: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>',
+  people: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M17 14.3c2.3.2 4 1.7 4.6 4.7"/></svg>',
+  gear: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  x: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  back: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>'
+};
+
+/* =========================================================
+   ロック画面
+   ========================================================= */
+function showLock(mode){
+  // mode: 'setup' | 'unlock'
+  key = null; D = null;
+  closeModal();
+  $('app').classList.add('hidden'); $('app').innerHTML = '';
+  var L = $('lock'); L.classList.remove('hidden');
+  document.body.classList.remove('covered');
+  if (mode === 'setup') {
+    L.innerHTML =
+      '<form class="lock-box" id="setupForm" autocomplete="off">' +
+        '<div class="lock-icon">' + ICON.lockBig + '</div>' +
+        '<h1>会った帳</h1>' +
+        '<p>はじめに、このアプリを開くためのパスコードを決めてください。</p>' +
+        '<input type="password" id="pc1" placeholder="パスコード（4文字以上）" autocomplete="new-password" required minlength="4">' +
+        '<input type="password" id="pc2" placeholder="もう一度" autocomplete="new-password" required minlength="4">' +
+        '<div class="lock-err" id="lockErr"></div>' +
+        '<button class="btn" type="submit" id="lockBtn">はじめる</button>' +
+        '<div class="note">記録はこのパスコードで暗号化して、この端末の中だけに保存します。<b>パスコードを忘れると記録は取り出せません。</b>数字4桁よりも、6桁以上や英字まじりのほうが安全です。</div>' +
+      '</form>';
+    setTimeout(function(){ $('pc1').focus(); }, 50);
+  } else {
+    L.innerHTML =
+      '<form class="lock-box" id="unlockForm" autocomplete="off">' +
+        '<div class="lock-icon">' + ICON.lockBig + '</div>' +
+        '<h1>会った帳</h1>' +
+        '<p>パスコードを入力してください</p>' +
+        '<input type="password" id="pc" placeholder="パスコード" autocomplete="current-password" required>' +
+        '<div class="lock-err" id="lockErr"></div>' +
+        '<button class="btn" type="submit" id="lockBtn">開く</button>' +
+        '<div class="lock-foot"><button type="button" data-act="forgot">パスコードを忘れた</button></div>' +
+      '</form>';
+    tickWait();
+    setTimeout(function(){ var i = $('pc'); if (i && !i.disabled) i.focus(); }, 50);
+  }
+}
+
+var waitTimer;
+function tickWait(){
+  clearTimeout(waitTimer);
+  var f = failState(), btn = $('lockBtn'), inp = $('pc');
+  if (!btn || !inp) return;
+  var rest = Math.ceil((f.until - Date.now()) / 1000);
+  if (rest > 0) {
+    btn.disabled = true; inp.disabled = true;
+    $('lockErr').textContent = f.n + '回まちがえたため、あと' + (rest >= 60 ? Math.ceil(rest / 60) + '分' : rest + '秒') + '待ってください';
+    waitTimer = setTimeout(tickWait, 1000);
+  } else {
+    if (btn.disabled) { btn.disabled = false; inp.disabled = false; $('lockErr').textContent = ''; inp.focus(); }
+  }
+}
+
+function doSetup(){
+  var a = $('pc1').value, b = $('pc2').value, err = $('lockErr');
+  if (a.length < 4) { err.textContent = '4文字以上にしてください'; return; }
+  if (a !== b) { err.textContent = '2回の入力が一致しません'; $('pc2').value = ''; $('pc2').focus(); return; }
+  $('lockBtn').disabled = true; err.textContent = '';
+  salt = rand(16); iter = ITER;
+  deriveKey(a, salt, iter).then(function(k){
+    key = k; D = emptyData();
+    return save();
+  }).then(function(){ localStorage.removeItem(LS_FAIL); enterApp(); toast('パスコードを設定しました'); });
+}
+
+function doUnlock(){
+  var pass = $('pc').value, box = readVault(), err = $('lockErr'), btn = $('lockBtn');
+  if (!box) { showLock('setup'); return; }
+  if (failState().until > Date.now()) { tickWait(); return; }
+  btn.disabled = true; err.textContent = '確認しています…';
+  var s = b64d(box.salt), it = box.iter || ITER, k;
+  deriveKey(pass, s, it).then(function(kk){ k = kk; return open_(k, box); }).then(function(text){
+    key = k; salt = s; iter = it;
+    D = normalize(JSON.parse(text));
+    localStorage.removeItem(LS_FAIL);
+    enterApp();
+  }, function(){
+    var f = addFail();
+    $('pc').value = '';
+    btn.disabled = false;
+    err.textContent = 'パスコードがちがいます' + (f.n >= 3 && f.n < 5 ? '（あと' + (5 - f.n) + '回で待ち時間が入ります）' : '');
+    tickWait();
+    if (!$('pc').disabled) $('pc').focus();
+  });
+}
+
+function forgot(){
+  if (!confirm('パスコードが分からない場合、記録を取り出す方法はありません。\n\nこの端末の記録をすべて消して、はじめからやり直しますか？')) return;
+  if (!confirm('本当に消しますか？この操作は取り消せません。')) return;
+  localStorage.removeItem(LS_VAULT); localStorage.removeItem(LS_FAIL);
+  showLock('setup');
+}
+
+function lockNow(){ save(); showLock('unlock'); }
+
+/* ---------- 自動ロック ---------- */
+var lastActive = Date.now(), hiddenAt = 0;
+['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach(function(ev){
+  window.addEventListener(ev, function(){ lastActive = Date.now(); }, { passive: true, capture: true });
+});
+setInterval(function(){
+  if (!key || !D) return;
+  var min = D.settings.autoLock;
+  if (min > 0 && Date.now() - lastActive > min * 60000) lockNow();
+}, 10000);
+document.addEventListener('visibilitychange', function(){
+  if (document.hidden) {
+    hiddenAt = Date.now();
+    if (key) document.body.classList.add('covered');   // アプリ切替画面に中身が映らないように
+    if (key && D && D.settings.autoLock === 0) lockNow();
+  } else {
+    if (key && D) {
+      var min = D.settings.autoLock;
+      if (min > 0 && Date.now() - Math.max(hiddenAt, lastActive) > min * 60000) { lockNow(); return; }
+      lastActive = Date.now();
+    }
+    document.body.classList.remove('covered');
+  }
+});
+window.addEventListener('pagehide', function(){ if (key) save(); });
+
+/* =========================================================
+   本体の画面
+   ========================================================= */
+var UI = { tab: 'meets', q: '', cat: '', personId: null, pq: '', psort: 'recent' };
+
+function enterApp(){
+  $('lock').classList.add('hidden'); $('lock').innerHTML = '';
+  $('app').classList.remove('hidden');
+  lastActive = Date.now();
+  UI.personId = null;
+  render();
+}
+
+function render(){
+  if (!D) return;
+  var title = UI.tab === 'meets' ? '会った帳' : UI.tab === 'people' ? (UI.personId ? '人の詳細' : '人') : '設定';
+  var body = UI.tab === 'meets' ? viewMeets() : UI.tab === 'people' ? (UI.personId ? viewPerson() : viewPeople()) : viewSettings();
+  var fab = UI.tab === 'settings' ? '' : '<button class="btn fab" data-act="new-meet"' + (UI.personId ? ' data-pid="' + esc(UI.personId) + '"' : '') + '>＋ 会った記録</button>';
+  var keepSearch = document.activeElement && document.activeElement.id;
+  var selStart = document.activeElement && document.activeElement.selectionStart;
+  $('app').innerHTML =
+    '<header class="top"><h1>' + esc(title) + '</h1>' +
+      '<button class="icon-btn" data-act="lock" aria-label="ロックする" title="ロックする">' + ICON.lock + '</button></header>' +
+    '<main>' + body + '</main>' + fab +
+    '<nav class="tabs">' +
+      tabBtn('meets', '記録', ICON.list) + tabBtn('people', '人', ICON.people) + tabBtn('settings', '設定', ICON.gear) +
+    '</nav>';
+  if (keepSearch === 'q' || keepSearch === 'pq') {
+    var el = $(keepSearch); if (el) { el.focus(); try { el.setSelectionRange(selStart, selStart); } catch (e) {} }
+  }
+}
+function tabBtn(id, label, icon){ return '<button data-act="tab" data-tab="' + id + '"' + (UI.tab === id ? ' aria-current="page"' : '') + '>' + icon + label + '</button>'; }
+
+function meetItem(m, showYear){
+  var d = parseD(m.date), wd = d.getDay();
+  var names = namesOf(m);
+  var meta = [];
+  if (m.time) meta.push(m.time);
+  if (m.place) meta.push('📍' + m.place);
+  if (m.memo) meta.push(m.memo.replace(/\s+/g, ' '));
+  return '<button class="item" data-act="edit-meet" data-id="' + esc(m.id) + '">' +
+    '<span class="d">' + (showYear ? '<span class="y">' + d.getFullYear() + '</span>' : '') + '<b>' + d.getDate() + '</b><small class="' + (wd === 0 ? 'sun' : wd === 6 ? 'sat' : '') + '">' + (showYear ? (d.getMonth() + 1) + '月・' : '') + WD[wd] + '</small></span>' +
+    '<span class="body">' +
+      '<span class="t" style="display:block">' + (m.cat ? '<span class="badge ' + catClass(m.cat) + '">' + esc(m.cat) + '</span>' : '') + esc(m.title || (m.cat ? '' : '（名目なし）')) + '</span>' +
+      '<span class="ppl" style="display:block">' + (names.length ? esc(names.join('、')) : '<span style="color:var(--faint)">相手の記録なし</span>') + '</span>' +
+      (meta.length ? '<span class="meta" style="display:block">' + esc(meta.join(' · ')) + '</span>' : '') +
+    '</span></button>';
+}
+
+function viewMeets(){
+  var now = new Date(), y = String(now.getFullYear()), ym = y + '-' + pad(now.getMonth() + 1);
+  var nYear = 0, nMonth = 0;
+  D.meets.forEach(function(m){ if (m.date.slice(0, 4) === y) nYear++; if (m.date.slice(0, 7) === ym) nMonth++; });
+  var h = '<div class="sum"><div><small>今月</small><b>' + nMonth + '<span>回</span></b></div><div><small>' + y + '年</small><b>' + nYear + '<span>回</span></b></div><div><small>登録した人</small><b>' + D.people.length + '<span>人</span></b></div></div>';
+
+  if (!D.meets.length) {
+    return h + '<div class="empty"><b>まだ記録がありません</b>右下の「＋ 会った記録」から、いつ・誰と・どんな名目で会ったかを残せます。</div>';
+  }
+  var catsUsed = {}; D.meets.forEach(function(m){ if (m.cat) catsUsed[m.cat] = 1; });
+  var catOpts = D.cats.concat(Object.keys(catsUsed).filter(function(c){ return D.cats.indexOf(c) < 0; }));
+  h += '<div class="tools"><input type="search" id="q" placeholder="名目・人・場所・メモで検索" value="' + esc(UI.q) + '" autocomplete="off">' +
+    '<select id="catFilter" aria-label="種類で絞り込み"><option value="">すべての種類</option>' +
+    catOpts.map(function(c){ return '<option' + (UI.cat === c ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></div>';
+
+  var q = UI.q.trim().toLowerCase();
+  var list = sortedMeets(D.meets).filter(function(m){
+    if (UI.cat && m.cat !== UI.cat) return false;
+    if (!q) return true;
+    var hay = [m.title, m.cat, m.place, m.memo].concat(m.people.map(function(id){ var p = personById(id); return p ? p.name + ' ' + (p.kana || '') : ''; })).join(' ').toLowerCase();
+    return q.split(/\s+/).every(function(w){ return hay.indexOf(w) >= 0; });
+  });
+  if (!list.length) return h + '<div class="empty"><b>見つかりません</b>条件を変えてみてください。</div>';
+  var cur = '', out = '';
+  var counts = {}; list.forEach(function(m){ var k = m.date.slice(0, 7); counts[k] = (counts[k] || 0) + 1; });
+  list.forEach(function(m){
+    var k = m.date.slice(0, 7);
+    if (k !== cur) {
+      if (cur) out += '</div>';
+      cur = k;
+      out += '<div class="month"><span>' + (+k.slice(0, 4)) + '年' + (+k.slice(5)) + '月</span><span>' + counts[k] + '回</span></div><div class="list">';
+    }
+    out += meetItem(m, false);
+  });
+  return h + out + '</div>';
+}
+
+function viewPeople(){
+  if (!D.people.length) {
+    return '<div class="empty"><b>まだ誰も登録されていません</b>会った記録をつけるときに名前を入れると、ここに自動で並びます。<br><br><button class="btn sub" data-act="new-person">＋ 人を登録する</button></div>';
+  }
+  var st = personStats();
+  var q = UI.pq.trim().toLowerCase();
+  var list = D.people.filter(function(p){
+    if (!q) return true;
+    return (p.name + ' ' + (p.kana || '') + ' ' + (p.group || '') + ' ' + (p.memo || '')).toLowerCase().indexOf(q) >= 0;
+  });
+  var byName = function(a, b){ return (a.kana || a.name).localeCompare(b.kana || b.name, 'ja'); };
+  list.sort(function(a, b){
+    var A = st[a.id], B = st[b.id];
+    if (UI.psort === 'name') return byName(a, b);
+    if (UI.psort === 'count') return (B.count - A.count) || byName(a, b);
+    if (UI.psort === 'long') {           // 会っていない順（記録なしは最後）
+      if (!A.last !== !B.last) return A.last ? -1 : 1;
+      return (A.last < B.last ? -1 : A.last > B.last ? 1 : 0) || byName(a, b);
+    }
+    if (A.last !== B.last) return A.last < B.last ? 1 : -1;   // 最近会った順
+    return byName(a, b);
+  });
+  var h = '<div class="tools"><input type="search" id="pq" placeholder="名前・関係で検索" value="' + esc(UI.pq) + '" autocomplete="off">' +
+    '<select id="psort" aria-label="並び順">' +
+      [['recent', '最近会った順'], ['long', '会っていない順'], ['count', '回数が多い順'], ['name', '名前順']].map(function(o){ return '<option value="' + o[0] + '"' + (UI.psort === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') +
+    '</select></div>';
+  if (!list.length) return h + '<div class="empty"><b>見つかりません</b></div>';
+  h += '<div class="list">' + list.map(function(p){
+    var s = st[p.id];
+    var agoTxt = s.last ? '<span class="ago' + (daysSince(s.last) > 180 ? ' long' : '') + '">' + ago(s.last) + '</span>' : 'まだ記録なし';
+    return '<button class="person" data-act="open-person" data-id="' + esc(p.id) + '">' + avatar(p) +
+      '<span class="body"><span class="n" style="display:block">' + esc(p.name) + (p.group ? ' <span class="badge" style="margin-left:4px">' + esc(p.group) + '</span>' : '') + '</span>' +
+      '<span class="s" style="display:block">最後に会った: ' + agoTxt + (s.last ? '（' + esc(s.last.replace(/-/g, '/')) + '）' : '') + '</span></span>' +
+      '<span class="cnt"><b>' + s.count + '</b>回</span></button>';
+  }).join('') + '</div>';
+  h += '<div style="text-align:center;margin-top:16px"><button class="btn ghost" data-act="new-person">＋ 人を登録する</button></div>';
+  return h;
+}
+
+function viewPerson(){
+  var p = personById(UI.personId);
+  if (!p) { UI.personId = null; return viewPeople(); }
+  var st = personStats()[p.id];
+  var meets = sortedMeets(D.meets.filter(function(m){ return m.people.indexOf(p.id) >= 0; }));
+  var h = '<button class="back" data-act="back">' + ICON.back + '人の一覧</button>' +
+    '<div class="prof">' + avatar(p) + '<div style="flex:1;min-width:0"><h2>' + esc(p.name) + '</h2><div class="s">' +
+      esc([p.kana, p.group].filter(Boolean).join(' · ')) + '</div></div>' +
+      '<button class="btn sub sm" data-act="edit-person" data-id="' + esc(p.id) + '">編集</button></div>';
+  if (p.memo) h += '<div class="pmemo">' + esc(p.memo) + '</div>';
+  h += '<div class="stats">' +
+    '<div><small>会った回数</small><b>' + st.count + '回</b></div>' +
+    '<div><small>今年</small><b>' + st.year + '回</b></div>' +
+    '<div><small>最後に会った</small><b>' + (st.last ? ago(st.last) + '<span>' + st.last.replace(/-/g, '/') + '</span>' : '—') + '</b></div>' +
+    '<div><small>最初の記録</small><b>' + (st.first ? st.first.replace(/-/g, '/') : '—') + '</b></div></div>';
+  if (meets.length) {
+    var byCat = {};
+    meets.forEach(function(m){ var c = m.cat || '（種類なし）'; byCat[c] = (byCat[c] || 0) + 1; });
+    var cats = Object.keys(byCat).sort(function(a, b){ return byCat[b] - byCat[a]; });
+    var max = byCat[cats[0]];
+    h += '<h3 class="sec">どんな名目で会ったか</h3><div class="bars">' + cats.map(function(c){
+      var k = catClass(c);
+      return '<div class="r"><span>' + esc(c) + '</span><span><i style="width:' + (byCat[c] / max * 100) + '%;background:var(--c' + k.slice(1) + ')"></i></span><em>' + byCat[c] + '</em></div>';
+    }).join('') + '</div>';
+    var withMap = {};
+    meets.forEach(function(m){ m.people.forEach(function(id){ if (id !== p.id) withMap[id] = (withMap[id] || 0) + 1; }); });
+    var withIds = Object.keys(withMap).filter(personById).sort(function(a, b){ return withMap[b] - withMap[a]; }).slice(0, 10);
+    if (withIds.length) {
+      h += '<h3 class="sec">一緒に会った人</h3><div class="tags">' + withIds.map(function(id){
+        return '<button class="tag" data-act="open-person" data-id="' + esc(id) + '">' + esc(personById(id).name) + '<em>' + withMap[id] + '</em></button>';
+      }).join('') + '</div>';
+    }
+    h += '<h3 class="sec">記録（' + meets.length + '件）</h3><div class="list">' + meets.map(function(m){ return meetItem(m, true); }).join('') + '</div>';
+  } else {
+    h += '<div class="empty" style="padding-top:20px">まだこの人と会った記録はありません。</div>';
+  }
+  return h;
+}
+
+function viewSettings(){
+  var al = D.settings.autoLock;
+  var opts = [[0, 'アプリを離れたらすぐ'], [1, '1分操作しなかったら'], [5, '5分操作しなかったら'], [15, '15分操作しなかったら'], [60, '1時間操作しなかったら']];
+  return '<div class="group"><h2>ロック</h2>' +
+      '<div class="row"><div class="l">自動でロック</div><select id="autoLock">' + opts.map(function(o){ return '<option value="' + o[0] + '"' + (al === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select></div>' +
+      '<button class="row" data-act="change-pass"><span class="l">パスコードを変更</span></button>' +
+      '<button class="row" data-act="lock"><span class="l">今すぐロック</span></button>' +
+    '</div>' +
+    '<div class="group"><h2>会った名目の種類</h2>' +
+      '<div class="cats">' + D.cats.map(function(c, i){
+        return '<span class="badge ' + catClass(c) + '"><button style="width:auto;height:auto;border-radius:0;opacity:1" data-act="rename-cat" data-i="' + i + '">' + esc(c) + '</button>' +
+          '<button data-act="del-cat" data-i="' + i + '" aria-label="' + esc(c) + 'を削除">' + ICON.x + '</button></span>';
+      }).join('') + '</div>' +
+      '<div class="row"><div class="l"><small>名前をタップすると変更できます（変更は過去の記録にも反映されます）</small></div><button class="btn sub sm" data-act="add-cat">＋ 追加</button></div>' +
+    '</div>' +
+    '<div class="group"><h2>バックアップ</h2>' +
+      '<button class="row" data-act="export"><span class="l">バックアップを書き出す<small>暗号化したファイル（.json）。読み込むときは書き出した時点のパスコードが必要です</small></span></button>' +
+      '<button class="row" data-act="import"><span class="l">バックアップを読み込む<small>今の記録に合わせます（同じ記録は新しいほうを残します）</small></span></button>' +
+      '<button class="row" data-act="csv"><span class="l">表計算用に書き出す（CSV）<small>暗号化されていないファイルになるので、扱いに注意してください</small></span></button>' +
+    '</div>' +
+    '<div class="group"><h2>データ</h2>' +
+      '<div class="row"><div class="l">記録 ' + D.meets.length + '件 · 人 ' + D.people.length + '人<small>この端末の中に暗号化して保存しています。外部には送信しません</small></div></div>' +
+      '<button class="row dz" data-act="wipe">すべての記録を消去</button>' +
+    '</div>' +
+    '<p class="about">会った帳 · 記録は AES-256 で暗号化され、パスコードはどこにも保存されません。ブラウザのデータを消すと記録も消えるので、ときどきバックアップを書き出してください。</p>';
+}
+
+/* =========================================================
+   モーダル（記録・人の編集など）
+   ========================================================= */
+var form = null;   // 開いているフォームの状態
+
+function openModal(html){ var M = $('modal'); M.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + '</div>'; M.classList.remove('hidden'); document.body.style.overflow = 'hidden'; }
+function closeModal(){ var M = $('modal'); M.classList.add('hidden'); M.innerHTML = ''; document.body.style.overflow = ''; form = null; }
+
+function meetForm(m, presetPid){
+  var isNew = !m;
+  m = m || { id: null, date: todayStr(), time: '', cat: '', title: '', people: presetPid ? [presetPid] : [], place: '', memo: '' };
+  form = { type: 'meet', id: m.id, people: m.people.filter(personById).map(function(id){ return { id: id }; }) };
+  var cats = D.cats.slice(); if (m.cat && cats.indexOf(m.cat) < 0) cats.push(m.cat);
+  openModal(
+    '<div class="sheet-head"><h2>' + (isNew ? '会った記録をつける' : '記録を編集') + '</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
+    '<div class="two"><label class="f"><span>日付</span><input type="date" id="fDate" value="' + esc(m.date) + '" required></label>' +
+      '<label class="f"><span>時刻（任意）</span><input type="time" id="fTime" value="' + esc(m.time || '') + '"></label></div>' +
+    '<div class="fblock"><span class="f-label">会った人</span><div class="pp-box" id="ppBox"></div><div class="sugg" id="ppSugg"></div></div>' +
+    '<div class="fblock"><span class="f-label">種類</span><div class="chips">' + cats.map(function(c){
+      return '<label class="chip"><input type="radio" name="cat" value="' + esc(c) + '"' + (m.cat === c ? ' checked' : '') + '><span>' + esc(c) + '</span></label>';
+    }).join('') + '</div></div>' +
+    '<label class="f"><span>名目</span><input type="text" id="fTitle" value="' + esc(m.title || '') + '" placeholder="例: 〇〇さんの誕生日祝い、転職の報告、ゼミOB会"></label>' +
+    '<label class="f"><span>場所（任意）</span><input type="text" id="fPlace" value="' + esc(m.place || '') + '" placeholder="例: 渋谷の居酒屋、〇〇さんの家" list="placeList"></label>' +
+    '<datalist id="placeList">' + uniq(D.meets.map(function(x){ return x.place; })).map(function(p){ return '<option value="' + esc(p) + '">'; }).join('') + '</datalist>' +
+    '<label class="f"><span>メモ（任意）</span><textarea id="fMemo" placeholder="話したこと、もらった物、次の約束など">' + esc(m.memo || '') + '</textarea></label>' +
+    '<div class="sheet-foot">' + (isNew ? '' : '<button class="btn danger" data-act="del-meet">削除</button>') +
+      '<span class="grow"></span>' + (isNew ? '' : '<button class="btn sub" data-act="dup-meet">複製</button>') +
+      '<button class="btn" data-act="save-meet">保存</button></div>'
+  );
+  renderPP();
+}
+function uniq(a){ var s = {}, out = []; a.forEach(function(x){ x = (x || '').trim(); if (x && !s[x]) { s[x] = 1; out.push(x); } }); return out; }
+
+function renderPP(){
+  var box = $('ppBox'); if (!box) return;
+  var q = $('ppInput') ? $('ppInput').value : '';
+  box.innerHTML = form.people.map(function(x, i){
+    var name = x.id ? (personById(x.id) || {}).name : x.name;
+    return '<span class="pp-chip' + (x.id ? '' : ' new') + '">' + esc(name) + '<button data-act="pp-remove" data-i="' + i + '" aria-label="' + esc(name) + 'を外す">' + ICON.x + '</button></span>';
+  }).join('') + '<input id="ppInput" type="text" placeholder="' + (form.people.length ? '追加…' : '名前を入れて選ぶ') + '" autocomplete="off" enterkeyhint="done" value="' + esc(q) + '">';
+  renderSugg();
+}
+function renderSugg(){
+  var el = $('ppSugg'); if (!el) return;
+  var q = ($('ppInput').value || '').trim();
+  var ql = q.toLowerCase();
+  var chosen = {}; form.people.forEach(function(x){ if (x.id) chosen[x.id] = 1; });
+  var st = personStats();
+  var cand = D.people.filter(function(p){
+    if (chosen[p.id]) return false;
+    return !ql || (p.name + ' ' + (p.kana || '')).toLowerCase().indexOf(ql) >= 0;
+  }).sort(function(a, b){
+    if (ql) { var as = a.name.toLowerCase().indexOf(ql) === 0 ? 0 : 1, bs = b.name.toLowerCase().indexOf(ql) === 0 ? 0 : 1; if (as !== bs) return as - bs; }
+    return (st[b.id].count - st[a.id].count) || (st[a.id].last < st[b.id].last ? 1 : -1);
+  }).slice(0, 8);
+  var exact = D.people.some(function(p){ return p.name === q; }) || form.people.some(function(x){ return !x.id && x.name === q; });
+  var h = '';
+  if (!q && cand.length) h += '<span class="hint">よく会う人:</span>';
+  h += cand.map(function(p){ return '<button data-act="pp-add" data-id="' + esc(p.id) + '">' + esc(p.name) + '</button>'; }).join('');
+  if (q && !exact) h += '<button class="add" data-act="pp-new">＋「' + esc(q) + '」を新しく登録</button>';
+  if (!q && !D.people.length && !form.people.length) h = '<span class="hint">名前を入れると、新しい人として登録できます</span>';
+  el.innerHTML = h;
+}
+function ppAdd(entry){
+  form.people.push(entry);
+  $('ppInput').value = '';
+  renderPP();
+  $('ppInput').focus();
+}
+
+function saveMeet(asCopy){
+  var date = $('fDate').value;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { toast('日付を入れてください'); return; }
+  var pending = ($('ppInput').value || '').trim();
+  if (pending) {
+    var hit = D.people.filter(function(p){ return p.name === pending; })[0];
+    form.people.push(hit ? { id: hit.id } : { name: pending });
+  }
+  var now = Date.now();
+  var ids = [];
+  form.people.forEach(function(x){
+    var id = x.id;
+    if (!id) {
+      var same = D.people.filter(function(p){ return p.name === x.name; })[0];
+      if (same) id = same.id;
+      else { id = uid(); D.people.push({ id: id, name: x.name, kana: '', group: '', memo: '', createdAt: now, updatedAt: now }); }
+    }
+    if (ids.indexOf(id) < 0) ids.push(id);
+  });
+  var catEl = document.querySelector('#modal input[name=cat]:checked');
+  var data = {
+    date: date, time: $('fTime').value || '', cat: catEl ? catEl.value : '',
+    title: $('fTitle').value.trim(), people: ids, place: $('fPlace').value.trim(), memo: $('fMemo').value.trim(), updatedAt: now
+  };
+  var m = form.id && !asCopy ? meetById(form.id) : null;
+  if (m) Object.assign(m, data);
+  else { data.id = uid(); data.createdAt = now; D.meets.push(data); }
+  save(); closeModal(); render();
+  toast(asCopy ? '複製して保存しました' : '保存しました');
+}
+
+function personForm(p){
+  var isNew = !p;
+  p = p || { id: null, name: '', kana: '', group: '', memo: '' };
+  form = { type: 'person', id: p.id };
+  var groups = uniq(DEFAULT_GROUPS.concat(D.people.map(function(x){ return x.group; })));
+  var st = p.id ? personStats()[p.id] : null;
+  openModal(
+    '<div class="sheet-head"><h2>' + (isNew ? '人を登録' : '人を編集') + '</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
+    '<label class="f"><span>名前</span><input type="text" id="pName" value="' + esc(p.name) + '" required placeholder="例: 山田 太郎、たろちゃん"></label>' +
+    '<label class="f"><span>ふりがな（任意・並び替えと検索に使います）</span><input type="text" id="pKana" value="' + esc(p.kana || '') + '"></label>' +
+    '<label class="f"><span>関係（任意）</span><input type="text" id="pGroup" value="' + esc(p.group || '') + '" list="groupList" placeholder="例: 友達、大学の同期、取引先"></label>' +
+    '<datalist id="groupList">' + groups.map(function(g){ return '<option value="' + esc(g) + '">'; }).join('') + '</datalist>' +
+    '<label class="f"><span>メモ（任意）</span><textarea id="pMemo" placeholder="知り合ったきっかけ、好きなもの、家族のことなど">' + esc(p.memo || '') + '</textarea></label>' +
+    '<div class="sheet-foot">' + (isNew ? '' : '<button class="btn danger" data-act="del-person">削除</button>') +
+      '<span class="grow"></span><button class="btn" data-act="save-person">保存</button></div>' +
+    (st && st.count ? '<p class="about" style="margin-top:10px">削除しても会った記録そのものは残り、相手の欄からこの人が外れます（' + st.count + '件）。</p>' : '')
+  );
+  if (isNew) setTimeout(function(){ $('pName').focus(); }, 60);
+}
+function savePerson(){
+  var name = $('pName').value.trim();
+  if (!name) { toast('名前を入れてください'); $('pName').focus(); return; }
+  var dupe = D.people.filter(function(x){ return x.name === name && x.id !== form.id; })[0];
+  if (dupe && !confirm('「' + name + '」はすでに登録されています。同じ名前で別の人として保存しますか？')) return;
+  var now = Date.now();
+  var data = { name: name, kana: $('pKana').value.trim(), group: $('pGroup').value.trim(), memo: $('pMemo').value.trim(), updatedAt: now };
+  var p = form.id ? personById(form.id) : null;
+  if (p) Object.assign(p, data);
+  else { data.id = uid(); data.createdAt = now; D.people.push(data); }
+  save(); closeModal(); render(); toast('保存しました');
+}
+
+function passForm(){
+  form = { type: 'pass' };
+  openModal(
+    '<div class="sheet-head"><h2>パスコードを変更</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
+    '<form id="passForm" autocomplete="off">' +
+    '<label class="f"><span>いまのパスコード</span><input type="password" id="op" autocomplete="current-password" required></label>' +
+    '<label class="f"><span>新しいパスコード（4文字以上）</span><input type="password" id="np1" autocomplete="new-password" required minlength="4"></label>' +
+    '<label class="f"><span>新しいパスコード（もう一度）</span><input type="password" id="np2" autocomplete="new-password" required minlength="4"></label>' +
+    '<div class="lock-err" id="passErr"></div>' +
+    '<div class="sheet-foot"><span class="grow"></span><button class="btn" type="submit" id="passBtn">変更する</button></div></form>'
+  );
+  setTimeout(function(){ $('op').focus(); }, 60);
+}
+function changePass(){
+  var op = $('op').value, a = $('np1').value, b = $('np2').value, err = $('passErr');
+  if (a.length < 4) { err.textContent = '新しいパスコードは4文字以上にしてください'; return; }
+  if (a !== b) { err.textContent = '新しいパスコードが一致しません'; return; }
+  var box = readVault();
+  $('passBtn').disabled = true; err.textContent = '確認しています…';
+  saving.then(function(){ return deriveKey(op, b64d(box.salt), box.iter || ITER); })
+    .then(function(k){ return open_(k, readVault()); })
+    .then(function(){
+      var s = rand(16);
+      return deriveKey(a, s, ITER).then(function(k){ key = k; salt = s; iter = ITER; return save(); });
+    }).then(function(){ closeModal(); toast('パスコードを変更しました'); },
+    function(){ err.textContent = 'いまのパスコードがちがいます'; var bt = $('passBtn'); if (bt) bt.disabled = false; });
+}
+
+function importPassForm(box){
+  form = { type: 'importPass', box: box };
+  openModal(
+    '<div class="sheet-head"><h2>バックアップを開く</h2><button class="btn ghost" data-act="close">閉じる</button></div>' +
+    '<form id="importForm" autocomplete="off"><p style="font-size:14px;color:var(--muted)">このバックアップを書き出したときのパスコードを入力してください。</p>' +
+    '<label class="f"><span>パスコード</span><input type="password" id="ip" required></label>' +
+    '<div class="lock-err" id="ipErr"></div>' +
+    '<div class="sheet-foot"><span class="grow"></span><button class="btn" type="submit">読み込む</button></div></form>'
+  );
+  setTimeout(function(){ $('ip').focus(); }, 60);
+}
+
+/* ---------- バックアップ ---------- */
+function stamp(){ var d = new Date(); return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()); }
+function doExport(){
+  seal(key, salt, iter, JSON.stringify(D)).then(function(box){
+    download('atta-cho-backup-' + stamp() + '.json', JSON.stringify(box), 'application/json');
+    toast('バックアップを書き出しました');
+  });
+}
+function doCSV(){
+  if (!confirm('CSV は暗号化されていないので、誰でも中身を読めます。書き出しますか？')) return;
+  var q = function(s){ s = String(s == null ? '' : s); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  var rows = [['日付', '時刻', '種類', '名目', '会った人', '場所', 'メモ']];
+  sortedMeets(D.meets).forEach(function(m){ rows.push([m.date, m.time, m.cat, m.title, namesOf(m).join('、'), m.place, m.memo]); });
+  download('atta-cho-' + stamp() + '.csv', '﻿' + rows.map(function(r){ return r.map(q).join(','); }).join('\r\n'), 'text/csv');
+}
+function onImportFile(file){
+  var r = new FileReader();
+  r.onload = function(){
+    var box;
+    try { box = JSON.parse(r.result); } catch (e) { toast('読み込めないファイルです'); return; }
+    if (!box || !box.ct || !box.iv || !box.salt) { toast('会った帳のバックアップではないようです'); return; }
+    // 今と同じパスコード・同じ salt なら、そのまま開ける
+    var tryKey = box.salt === b64e(salt) ? Promise.resolve(key) : Promise.reject();
+    tryKey.then(function(k){ return open_(k, box); }).then(mergeIn, function(){ importPassForm(box); });
+  };
+  r.readAsText(file);
+}
+function importWithPass(){
+  var box = form.box, pass = $('ip').value;
+  $('ipErr').textContent = '確認しています…';
+  deriveKey(pass, b64d(box.salt), box.iter || ITER).then(function(k){ return open_(k, box); })
+    .then(function(text){ closeModal(); mergeIn(text); }, function(){ $('ipErr').textContent = 'パスコードがちがいます'; });
+}
+function mergeIn(text){
+  var src;
+  try { src = normalize(JSON.parse(text)); } catch (e) { toast('中身を読めませんでした'); return; }
+  var added = 0, updated = 0;
+  function merge(dst, list){
+    list.forEach(function(x){
+      var i = -1; for (var j = 0; j < dst.length; j++) if (dst[j].id === x.id) { i = j; break; }
+      if (i < 0) { dst.push(x); added++; }
+      else if ((x.updatedAt || 0) > (dst[i].updatedAt || 0)) { dst[i] = x; updated++; }
+    });
+  }
+  merge(D.people, src.people);
+  merge(D.meets, src.meets);
+  src.cats.forEach(function(c){ if (D.cats.indexOf(c) < 0) D.cats.push(c); });
+  save(); render();
+  toast('読み込みました（追加 ' + added + '件・更新 ' + updated + '件）');
+}
+
+/* =========================================================
+   操作
+   ========================================================= */
+document.addEventListener('click', function(e){
+  var t = e.target.closest('[data-act]'); if (!t) return;
+  var act = t.getAttribute('data-act'), id = t.getAttribute('data-id');
+  if (act === 'forgot') return forgot();
+  if (!D) return;
+  switch (act) {
+    case 'tab': UI.tab = t.getAttribute('data-tab'); UI.personId = null; render(); window.scrollTo(0, 0); break;
+    case 'lock': lockNow(); break;
+    case 'new-meet': meetForm(null, t.getAttribute('data-pid')); break;
+    case 'edit-meet': meetForm(meetById(id)); break;
+    case 'save-meet': saveMeet(false); break;
+    case 'dup-meet':
+      if (form) { form.id = null; $('fDate').value = todayStr(); $('fTime').value = ''; document.querySelector('.sheet-head h2').textContent = '複製して新しい記録'; t.remove(); var del = document.querySelector('[data-act=del-meet]'); if (del) del.remove(); toast('日付を変えて保存してください'); }
+      break;
+    case 'del-meet':
+      if (confirm('この記録を削除しますか？')) { D.meets = D.meets.filter(function(m){ return m.id !== form.id; }); save(); closeModal(); render(); toast('削除しました'); }
+      break;
+    case 'pp-add': ppAdd({ id: id }); break;
+    case 'pp-new': ppAdd({ name: $('ppInput').value.trim() }); break;
+    case 'pp-remove': form.people.splice(+t.getAttribute('data-i'), 1); renderPP(); break;
+    case 'open-person': UI.tab = 'people'; UI.personId = id; render(); window.scrollTo(0, 0); break;
+    case 'back': UI.personId = null; render(); break;
+    case 'new-person': personForm(null); break;
+    case 'edit-person': personForm(personById(id)); break;
+    case 'save-person': savePerson(); break;
+    case 'del-person':
+      if (confirm('「' + personById(form.id).name + '」を削除しますか？')) {
+        var pid = form.id;
+        D.people = D.people.filter(function(p){ return p.id !== pid; });
+        D.meets.forEach(function(m){ var i = m.people.indexOf(pid); if (i >= 0) { m.people.splice(i, 1); m.updatedAt = Date.now(); } });
+        UI.personId = null; save(); closeModal(); render(); toast('削除しました');
+      }
+      break;
+    case 'close': closeModal(); break;
+    case 'change-pass': passForm(); break;
+    case 'add-cat':
+      var nc = (prompt('追加する種類の名前') || '').trim();
+      if (nc && D.cats.indexOf(nc) < 0) { D.cats.push(nc); save(); render(); }
+      break;
+    case 'rename-cat':
+      var i = +t.getAttribute('data-i'), old = D.cats[i];
+      var nn = (prompt('新しい名前', old) || '').trim();
+      if (nn && nn !== old) {
+        if (D.cats.indexOf(nn) >= 0) { toast('同じ名前がすでにあります'); break; }
+        D.cats[i] = nn;
+        D.meets.forEach(function(m){ if (m.cat === old) { m.cat = nn; m.updatedAt = Date.now(); } });
+        if (UI.cat === old) UI.cat = nn;
+        save(); render();
+      }
+      break;
+    case 'del-cat':
+      var di = +t.getAttribute('data-i');
+      if (confirm('「' + D.cats[di] + '」を選択肢から外しますか？（過去の記録の種類はそのまま残ります）')) { D.cats.splice(di, 1); save(); render(); }
+      break;
+    case 'export': doExport(); break;
+    case 'import': $('importFile').value = ''; $('importFile').click(); break;
+    case 'csv': doCSV(); break;
+    case 'wipe':
+      if (confirm('すべての記録と登録した人を消去しますか？') && confirm('本当に消去しますか？この操作は取り消せません。')) {
+        var keep = D.settings; D = emptyData(); D.settings = keep; save(); UI.personId = null; render(); toast('消去しました');
+      }
+      break;
+  }
+});
+
+document.addEventListener('submit', function(e){
+  e.preventDefault();
+  var id = e.target.id;
+  if (id === 'setupForm') doSetup();
+  else if (id === 'unlockForm') doUnlock();
+  else if (id === 'passForm') changePass();
+  else if (id === 'importForm') importWithPass();
+});
+
+document.addEventListener('input', function(e){
+  var id = e.target.id;
+  if (e.isComposing && (id === 'q' || id === 'pq')) return;   // 変換中は描き直さない
+  if (id === 'q') { UI.q = e.target.value; render(); }
+  else if (id === 'pq') { UI.pq = e.target.value; render(); }
+  else if (id === 'ppInput') renderSugg();
+});
+document.addEventListener('compositionend', function(e){
+  var id = e.target.id;
+  if (id === 'q') { UI.q = e.target.value; render(); }
+  else if (id === 'pq') { UI.pq = e.target.value; render(); }
+});
+document.addEventListener('change', function(e){
+  var id = e.target.id;
+  if (id === 'catFilter') { UI.cat = e.target.value; render(); }
+  else if (id === 'psort') { UI.psort = e.target.value; render(); }
+  else if (id === 'autoLock') { D.settings.autoLock = +e.target.value; save(); toast('自動ロックを変更しました'); }
+  else if (id === 'importFile' && e.target.files[0]) onImportFile(e.target.files[0]);
+});
+document.addEventListener('keydown', function(e){
+  if (e.target.id === 'ppInput') {
+    if (e.key === 'Enter' && !e.isComposing) {
+      e.preventDefault();
+      var first = document.querySelector('#ppSugg button');
+      if (e.target.value.trim() && first) first.click();
+    } else if (e.key === 'Backspace' && !e.target.value && form && form.people.length) {
+      form.people.pop(); renderPP(); $('ppInput').focus();
+    }
+  }
+  if (e.key === 'Escape' && !$('modal').classList.contains('hidden')) closeModal();
+});
+$('modal').addEventListener('click', function(e){ if (e.target === this) closeModal(); });
+
+/* =========================================================
+   起動
+   ========================================================= */
+if (!window.crypto || !crypto.subtle) {
+  $('lock').classList.remove('hidden');
+  $('lock').innerHTML = '<div class="lock-box"><h1>会った帳</h1><p>このブラウザでは暗号化の機能が使えないため開けません。https のページで、新しめのブラウザから開いてください。</p></div>';
+} else {
+  showLock(readVault() ? 'unlock' : 'setup');
+}
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch(function(){});
+}
+})();
+</script>
+</body>
+</html>
